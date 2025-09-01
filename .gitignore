@@ -168,3 +168,5 @@ storybook-static/
 # PWA
 sw.js
 workbox-*.js
+
+vite.config.ts.timestamp-*

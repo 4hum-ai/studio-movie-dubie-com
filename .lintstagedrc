@@ -1,6 +1,3 @@
 {
-  "src/**/*.{js,ts,vue}": ["eslint --fix", "prettier --write", "vue-tsc --noEmit"],
-  "src/**/*.{js,ts,vue,css,md,json}": ["prettier --write"],
-  "tests/**/*.{js,ts,vue}": ["eslint --fix", "prettier --write"],
-  "tests/**/*.{js,ts,vue,css,md,json}": ["prettier --write"]
+  "*": ["pnpm format", "pnpm lint:fix"]
 }

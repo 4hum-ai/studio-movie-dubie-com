@@ -1,1 +1,5 @@
-pnpm exec lint-staged --config .lintstagedrc
+pnpm lint-staged
+
+pnpm type-check
+
+pnpm test
