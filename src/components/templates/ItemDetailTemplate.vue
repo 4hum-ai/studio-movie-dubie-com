@@ -173,6 +173,7 @@
             :entity-type="resourceName"
             :entity-id="String(item.id)"
             :show-upload-button="true"
+            @media-click="(_, media) => emit('related-item-click', resourceName, String(media.id))"
           />
         </slot>
 

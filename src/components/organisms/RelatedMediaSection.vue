@@ -223,6 +223,10 @@ interface LocalMediaItem {
   [key: string]: unknown
 }
 
+const emit = defineEmits<{
+  'media-click': [mediaId: string, media: LocalMediaItem]
+}>()
+
 const relatedMedia = ref<LocalMediaItem[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -486,8 +490,8 @@ const closeAudio = () => {
 
 // Media item click handler
 const handleMediaClick = (media: LocalMediaItem) => {
-  // Could navigate to media detail view or show more info
-  console.log('Media clicked:', media)
+  // Bubble up the click so parent views can decide navigation (e.g., open editor)
+  emit('media-click', String(media.id), media)
 }
 
 // Media upload handler
