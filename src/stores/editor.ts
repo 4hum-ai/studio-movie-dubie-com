@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 
 export type MediaTrack = {
   id: string
@@ -21,22 +21,10 @@ export const useEditorStore = defineStore('editor', () => {
 
   const workingCopy = ref<HlsManifest>({ video: [], audio: [], captions: [] })
 
-  const selectedVideoId = ref<string>('')
-  const selectedAudioId = ref<string>('')
-  const selectedCaptionId = ref<string>('')
-
   const hasUnsaved = ref<boolean>(false)
   const jobs = ref<{ id: string; label: string; progress: number }[]>([])
 
-  const selectedVideo = computed(
-    () => workingCopy.value.video.find((t) => t.id === selectedVideoId.value) || null,
-  )
-  const selectedAudio = computed(
-    () => workingCopy.value.audio.find((t) => t.id === selectedAudioId.value) || null,
-  )
-  const selectedCaption = computed(
-    () => workingCopy.value.captions.find((t) => t.id === selectedCaptionId.value) || null,
-  )
+  // Selections are now owned by useMediaEditor composable
 
   function initialize(ids: { titleId: string; mediaId: string }) {
     titleId.value = ids.titleId
@@ -45,15 +33,6 @@ export const useEditorStore = defineStore('editor', () => {
 
   function setManifest(next: HlsManifest) {
     workingCopy.value = JSON.parse(JSON.stringify(next))
-    if (!selectedVideoId.value && workingCopy.value.video[0]) {
-      selectedVideoId.value = workingCopy.value.video[0].id
-    }
-    if (!selectedAudioId.value && workingCopy.value.audio[0]) {
-      selectedAudioId.value = workingCopy.value.audio[0].id
-    }
-    if (!selectedCaptionId.value && workingCopy.value.captions[0]) {
-      selectedCaptionId.value = workingCopy.value.captions[0].id
-    }
     hasUnsaved.value = false
   }
 
@@ -61,15 +40,7 @@ export const useEditorStore = defineStore('editor', () => {
     hasUnsaved.value = true
   }
 
-  function selectVideo(id: string) {
-    selectedVideoId.value = id
-  }
-  function selectAudio(id: string) {
-    selectedAudioId.value = id
-  }
-  function selectCaption(id: string) {
-    selectedCaptionId.value = id
-  }
+  // Selection setters removed; use useMediaEditor instead
 
   function addTrack(track: MediaTrack) {
     if (track.kind === 'video') workingCopy.value.video.push(track)
@@ -130,20 +101,11 @@ export const useEditorStore = defineStore('editor', () => {
     titleId,
     mediaId,
     workingCopy,
-    selectedVideoId,
-    selectedAudioId,
-    selectedCaptionId,
-    selectedVideo,
-    selectedAudio,
-    selectedCaption,
     hasUnsaved,
     jobs,
     initialize,
     setManifest,
     markUnsaved,
-    selectVideo,
-    selectAudio,
-    selectCaption,
     addTrack,
     removeTrack,
     enqueueJob,
