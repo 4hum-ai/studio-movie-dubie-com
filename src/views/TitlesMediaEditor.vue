@@ -129,6 +129,9 @@
               >
                 Update Manifest
               </Button>
+              <Button size="sm" variant="outline" class="ml-2" @click="saveLocal">
+                Save (Local)
+              </Button>
             </div>
           </div>
         </Card>
@@ -218,6 +221,10 @@ async function updateManifest() {
   editor.commitWorkingCopy()
 }
 
+function saveLocal() {
+  editor.persistToLocal()
+}
+
 function selectVideo(id: string) {
   selectedVideoId.value = id
   editor.selectVideo(id)
@@ -282,20 +289,23 @@ const mockVoices = ref([
 
 onMounted(() => {
   // mock manifest
-  manifest.value = {
-    video: [
-      { id: 'v-1080p', label: '1080p', url: 'https://cdn.test/video/1080.m3u8' },
-      { id: 'v-720p', label: '720p', url: 'https://cdn.test/video/720.m3u8' },
-    ],
-    audio: [
-      { id: 'a-orig-en', label: 'Original EN', lang: 'en' },
-      { id: 'a-dub-es', label: 'Dubbed ES', lang: 'es' },
-    ],
-    captions: [
-      { id: 'c-orig-en', label: 'Captions EN', lang: 'en' },
-      { id: 'c-trans-es', label: 'Captions ES (translated)', lang: 'es' },
-    ],
-  }
+  const loaded = editor.loadFromLocal()
+  manifest.value = loaded
+    ? editor.manifest
+    : {
+        video: [
+          { id: 'v-1080p', label: '1080p', url: 'https://cdn.test/video/1080.m3u8' },
+          { id: 'v-720p', label: '720p', url: 'https://cdn.test/video/720.m3u8' },
+        ],
+        audio: [
+          { id: 'a-orig-en', label: 'Original EN', lang: 'en' },
+          { id: 'a-dub-es', label: 'Dubbed ES', lang: 'es' },
+        ],
+        captions: [
+          { id: 'c-orig-en', label: 'Captions EN', lang: 'en' },
+          { id: 'c-trans-es', label: 'Captions ES (translated)', lang: 'es' },
+        ],
+      }
   loadFromMock({
     video: manifest.value.video.map((v) => ({ ...v, kind: 'video' })),
     audio: manifest.value.audio.map((a) => ({ ...a, kind: 'audio' })),

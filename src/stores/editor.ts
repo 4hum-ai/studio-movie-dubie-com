@@ -87,6 +87,32 @@ export const useEditorStore = defineStore('editor', () => {
     hasUnsaved.value = false
   }
 
+  function localKey(): string {
+    return `admin-ui:editor:manifest:${titleId.value}:${mediaId.value}`
+  }
+
+  function persistToLocal() {
+    try {
+      const key = localKey()
+      localStorage.setItem(key, JSON.stringify(workingCopy.value))
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function loadFromLocal(): boolean {
+    try {
+      const key = localKey()
+      const raw = localStorage.getItem(key)
+      if (!raw) return false
+      const parsed = JSON.parse(raw) as HlsManifest
+      setManifest(parsed)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   function removeTrack(kind: 'video' | 'audio' | 'captions', id: string) {
     const list = workingCopy.value[kind]
     const idx = list.findIndex((t) => t.id === id)
@@ -124,5 +150,7 @@ export const useEditorStore = defineStore('editor', () => {
     removeTrack,
     enqueueJob,
     commitWorkingCopy,
+    persistToLocal,
+    loadFromLocal,
   }
 })
