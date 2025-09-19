@@ -126,6 +126,17 @@
         </Card>
       </div>
     </div>
+    <VoicePickerModal
+      :open="showVoicePicker"
+      :voices="mockVoices"
+      @close="showVoicePicker = false"
+      @select="
+        () => {
+          showVoicePicker = false
+          createDubbing()
+        }
+      "
+    />
   </div>
 </template>
 
@@ -140,6 +151,7 @@ import VideoPlayer from '@/components/organisms/VideoPlayer.vue'
 // import CaptionEditor from '@/components/molecules/CaptionEditor.vue'
 import { useEditorStore } from '@/stores/editor'
 import { useHlsManifest } from '@/composables/useHlsManifest'
+import VoicePickerModal from '@/components/molecules/VoicePickerModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -198,10 +210,17 @@ function selectCaption(id: string) {
 function createDubbing() {
   // mock job
   jobs.value.push({ id: String(Date.now()), label: 'Dubbing', progress: 0 })
+  const id = jobs.value[jobs.value.length - 1].id
+  const timer = setInterval(() => {
+    const j = jobs.value.find((x) => x.id === id)
+    if (!j) return clearInterval(timer)
+    j.progress = Math.min(100, j.progress + 10)
+    if (j.progress >= 100) clearInterval(timer)
+  }, 800)
 }
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function createDubbingFrom(_audioId: string) {
-  createDubbing()
+  showVoicePicker.value = true
 }
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function translateCaptionFrom(_captionId: string) {
@@ -222,6 +241,13 @@ function transcodeToHls() {
 }
 
 const jobs = ref<{ id: string; label: string; progress: number }[]>([])
+const showVoicePicker = ref(false)
+const mockVoices = ref([
+  { id: '11labs-jane', name: 'Jane', provider: 'ElevenLabs' },
+  { id: '11labs-roberto', name: 'Roberto', provider: 'ElevenLabs' },
+  { id: 'azure-aria', name: 'Aria', provider: 'Azure' },
+  { id: 'gcp-en-us-wavenet-d', name: 'Wavenet D', provider: 'GCP' },
+])
 
 onMounted(() => {
   // mock manifest
