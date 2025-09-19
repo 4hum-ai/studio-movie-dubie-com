@@ -107,6 +107,18 @@
             <Button size="sm" variant="primary" @click="createTranslatedCaption()"
               >Create Translated Caption</Button
             >
+            <div class="pt-2">
+              <Button size="sm" variant="secondary" @click="uploadTrack">Upload Track</Button>
+              <Button
+                size="sm"
+                variant="primary"
+                class="ml-2"
+                :disabled="!editor.hasUnsaved"
+                @click="updateManifest"
+              >
+                Update Manifest
+              </Button>
+            </div>
           </div>
         </Card>
 
@@ -191,7 +203,7 @@ function refresh() {
 
 async function updateManifest() {
   // mock persist
-  ;(editor.hasUnsaved as unknown as { value: boolean }).value = false
+  editor.commitWorkingCopy()
 }
 
 function selectVideo(id: string) {
@@ -234,7 +246,9 @@ function editCaption(_captionId: string) {
   // open editor panel later
 }
 function uploadTrack() {
-  // mock upload
+  // mock upload: add a new audio track
+  const newId = `a-new-${Date.now()}`
+  editor.addTrack({ id: newId, label: 'New Dub (mock)', lang: 'es', kind: 'audio' })
 }
 function transcodeToHls() {
   // mock transcode

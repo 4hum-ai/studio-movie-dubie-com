@@ -82,6 +82,11 @@ export const useEditorStore = defineStore('editor', () => {
     hasUnsaved.value = true
   }
 
+  function commitWorkingCopy() {
+    manifest.value = JSON.parse(JSON.stringify(workingCopy.value))
+    hasUnsaved.value = false
+  }
+
   function removeTrack(kind: 'video' | 'audio' | 'captions', id: string) {
     const list = workingCopy.value[kind]
     const idx = list.findIndex((t) => t.id === id)
@@ -118,5 +123,6 @@ export const useEditorStore = defineStore('editor', () => {
     addTrack,
     removeTrack,
     enqueueJob,
+    commitWorkingCopy,
   }
 })
