@@ -87,6 +87,11 @@ export const useEditorStore = defineStore('editor', () => {
     hasUnsaved.value = false
   }
 
+  function setWorkingCopy(next: HlsManifest) {
+    workingCopy.value = JSON.parse(JSON.stringify(next))
+    hasUnsaved.value = true
+  }
+
   function localKey(): string {
     return `admin-ui:editor:manifest:${titleId.value}:${mediaId.value}`
   }
@@ -150,6 +155,7 @@ export const useEditorStore = defineStore('editor', () => {
     removeTrack,
     enqueueJob,
     commitWorkingCopy,
+    setWorkingCopy,
     persistToLocal,
     loadFromLocal,
   }
