@@ -94,6 +94,17 @@
             <VideoPlayer :url="playerSrc" mode="inline" />
           </div>
         </Card>
+        <Card>
+          <div class="border-b border-gray-200 p-3 dark:border-gray-700">
+            <h3 class="text-sm font-semibold">Caption Editor</h3>
+          </div>
+          <div class="p-3">
+            <div v-if="captionSegments.length === 0" class="text-sm text-gray-500">
+              Select a caption track and click Translate to load segments.
+            </div>
+            <CaptionEditor v-else :segments="captionSegments" @update="onSegmentUpdate" />
+          </div>
+        </Card>
       </div>
 
       <!-- Context panel -->
@@ -160,7 +171,7 @@ import AppBar from '@/components/molecules/AppBar.vue'
 import Card from '@/components/atoms/Card.vue'
 import Button from '@/components/atoms/Button.vue'
 import VideoPlayer from '@/components/organisms/VideoPlayer.vue'
-// import CaptionEditor from '@/components/molecules/CaptionEditor.vue'
+import CaptionEditor from '@/components/molecules/CaptionEditor.vue'
 import { useEditorStore } from '@/stores/editor'
 import { useHlsManifest } from '@/composables/useHlsManifest'
 import VoicePickerModal from '@/components/molecules/VoicePickerModal.vue'
@@ -186,6 +197,7 @@ const manifest = ref<{ video: Track[]; audio: Track[]; captions: Track[] }>({
   captions: [],
 })
 const { loadFromMock } = useHlsManifest()
+const captionSegments = ref<{ id: string; start: number; end: number; text: string }[]>([])
 
 const titleText = computed(() => `Title ${titleId.value} / Media ${mediaId.value}`)
 const playerSrc = computed(() => {
@@ -237,6 +249,11 @@ function createDubbingFrom(_audioId: string) {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function translateCaptionFrom(_captionId: string) {
   // mock translate
+  captionSegments.value = [
+    { id: '1', start: 0, end: 2.5, text: 'Hello world' },
+    { id: '2', start: 2.5, end: 5.0, text: 'This is a translated caption.' },
+    { id: '3', start: 5.0, end: 8.0, text: 'Edit me inline.' },
+  ]
 }
 function createTranslatedCaption() {
   // mock translate from currently selected caption
@@ -290,4 +307,9 @@ onMounted(() => {
     captions: manifest.value.captions.map((c) => ({ ...c, kind: 'captions' })),
   })
 })
+
+function onSegmentUpdate(id: string, text: string) {
+  const idx = captionSegments.value.findIndex((s) => s.id === id)
+  if (idx !== -1) captionSegments.value[idx] = { ...captionSegments.value[idx], text }
+}
 </script>
