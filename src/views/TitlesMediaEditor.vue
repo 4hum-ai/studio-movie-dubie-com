@@ -119,6 +119,11 @@
               >Create Translated Caption</Button
             >
             <div class="pt-2">
+              <Button v-if="isMp4" size="sm" variant="secondary" @click="transcodeToHls">
+                Transcode to HLS
+              </Button>
+            </div>
+            <div class="pt-2">
               <Button size="sm" variant="secondary" @click="uploadTrack">Upload Track</Button>
               <Button
                 size="sm"
@@ -322,6 +327,14 @@ onMounted(async () => {
     const finalIsHls = isHls || (!isMp4Detected && isHlsHint)
     const finalIsMp4 = isMp4Detected || (!finalIsHls && isMp4Hint)
 
+    console.debug('[Editor] media detection', {
+      url,
+      format,
+      contentType,
+      ext,
+      finalIsHls,
+      finalIsMp4,
+    })
     ;(isMp4 as unknown as { value: boolean }).value = finalIsMp4
 
     if (finalIsHls && url) {
