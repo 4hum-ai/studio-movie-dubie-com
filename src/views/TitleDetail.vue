@@ -24,7 +24,7 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'TitleDetail' })
-import { ref, computed, watch, onBeforeUnmount, onActivated, onDeactivated } from 'vue'
+import { ref, computed, watch, onBeforeUnmount, onActivated, onDeactivated, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ItemDetailTemplate from '@/components/templates/ItemDetailTemplate.vue'
 import { useResourceService } from '@/composables/useResourceService'
@@ -75,7 +75,18 @@ async function load() {
     }
     currentAbort?.abort()
     currentAbort = new AbortController()
-    const res = await api.getById('titles', id.value, currentAbort.signal)
+    let res: unknown
+    try {
+      res = await api.getById('titles', id.value, currentAbort.signal)
+    } catch {
+      // If API requires slug filter, try list with filters as fallback
+      const alt = await api.list(
+        'titles',
+        { page: 1, limit: 1, filters: { slug: id.value } },
+        currentAbort.signal,
+      )
+      res = (alt.data && alt.data[0]) || null
+    }
     item.value = res as ItemData
     lastLoadedId.value = id.value
     try {
@@ -159,6 +170,12 @@ onActivated(() => {
 
 onDeactivated(() => {
   isActive.value = false
+})
+
+onMounted(() => {
+  // Ensure initial load even when this view is not wrapped in KeepAlive include
+  isActive.value = true
+  if (id.value) load()
 })
 
 watch(id, () => {
