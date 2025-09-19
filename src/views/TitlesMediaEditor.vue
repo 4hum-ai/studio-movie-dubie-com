@@ -300,15 +300,31 @@ onMounted(async () => {
     const format = String((media as Record<string, unknown>)?.format || '')
     const contentType = String((media as Record<string, unknown>)?.contentType || '')
 
-    const isHls =
+    const getExt = (u: string): string => {
+      if (!u) return ''
+      const clean = u.split('?')[0]
+      const last = clean.split('.').pop() || ''
+      return last.toLowerCase()
+    }
+    const ext = getExt(url)
+
+    // Primary detection: use URL extension from media record
+    const isHls = ext === 'm3u8'
+    const isMp4Detected = ext === 'mp4'
+
+    // Secondary hints if extension missing
+    const isHlsHint =
       /m3u8/i.test(url) ||
       /application\/vnd\.apple\.mpegurl/i.test(contentType) ||
       /m3u8/i.test(format)
-    const isMp4Detected = /mp4/i.test(url) || /mp4/i.test(contentType) || /mp4/i.test(format)
+    const isMp4Hint = /mp4/i.test(url) || /mp4/i.test(contentType) || /mp4/i.test(format)
 
-    ;(isMp4 as unknown as { value: boolean }).value = !isHls && isMp4Detected
+    const finalIsHls = isHls || (!isMp4Detected && isHlsHint)
+    const finalIsMp4 = isMp4Detected || (!finalIsHls && isMp4Hint)
 
-    if (isHls && url) {
+    ;(isMp4 as unknown as { value: boolean }).value = finalIsMp4
+
+    if (finalIsHls && url) {
       await loadFromUrl(url)
       const parsed = hlsData.value
       manifest.value = {
@@ -320,7 +336,7 @@ onMounted(async () => {
           lang: t.lang,
         })),
       }
-    } else if (url) {
+    } else if (finalIsMp4 && url) {
       // Assume MP4 or other progressive source
       manifest.value = {
         video: [{ id: 'v-src', label: 'Source', url }],
