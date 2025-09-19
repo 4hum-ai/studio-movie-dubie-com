@@ -137,6 +137,9 @@ import AppBar from '@/components/molecules/AppBar.vue'
 import Card from '@/components/atoms/Card.vue'
 import Button from '@/components/atoms/Button.vue'
 import VideoPlayer from '@/components/organisms/VideoPlayer.vue'
+// import CaptionEditor from '@/components/molecules/CaptionEditor.vue'
+import { useEditorStore } from '@/stores/editor'
+import { useHlsManifest } from '@/composables/useHlsManifest'
 
 const route = useRoute()
 const router = useRouter()
@@ -144,8 +147,10 @@ const router = useRouter()
 const titleId = computed(() => String(route.params.id || ''))
 const mediaId = computed(() => String(route.params.mediaId || ''))
 
-const isMp4 = ref(false)
-const hasUnsaved = ref(false)
+const editor = useEditorStore()
+editor.initialize({ titleId: titleId.value, mediaId: mediaId.value })
+const isMp4 = editor.isMp4
+const hasUnsaved = editor.hasUnsaved
 const selectedAudioId = ref<string | null>(null)
 const selectedCaptionId = ref<string | null>(null)
 const selectedVideoId = ref<string | null>(null)
@@ -156,6 +161,7 @@ const manifest = ref<{ video: Track[]; audio: Track[]; captions: Track[] }>({
   audio: [],
   captions: [],
 })
+const { loadFromMock } = useHlsManifest()
 
 const titleText = computed(() => `Title ${titleId.value} / Media ${mediaId.value}`)
 const playerSrc = computed(() => {
@@ -173,17 +179,20 @@ function refresh() {
 
 async function updateManifest() {
   // mock persist
-  hasUnsaved.value = false
+  ;(editor.hasUnsaved as unknown as { value: boolean }).value = false
 }
 
 function selectVideo(id: string) {
   selectedVideoId.value = id
+  editor.selectVideo(id)
 }
 function selectAudio(id: string) {
   selectedAudioId.value = id
+  editor.selectAudio(id)
 }
 function selectCaption(id: string) {
   selectedCaptionId.value = id
+  editor.selectCaption(id)
 }
 
 function createDubbing() {
@@ -230,5 +239,15 @@ onMounted(() => {
       { id: 'c-trans-es', label: 'Captions ES (translated)', lang: 'es' },
     ],
   }
+  loadFromMock({
+    video: manifest.value.video.map((v) => ({ ...v, kind: 'video' })),
+    audio: manifest.value.audio.map((a) => ({ ...a, kind: 'audio' })),
+    captions: manifest.value.captions.map((c) => ({ ...c, kind: 'captions' })),
+  })
+  editor.setManifest({
+    video: manifest.value.video.map((v) => ({ ...v, kind: 'video' })),
+    audio: manifest.value.audio.map((a) => ({ ...a, kind: 'audio' })),
+    captions: manifest.value.captions.map((c) => ({ ...c, kind: 'captions' })),
+  })
 })
 </script>
