@@ -178,6 +178,7 @@ import CaptionEditor from '@/components/molecules/CaptionEditor.vue'
 import { useEditorStore } from '@/stores/editor'
 import { useHlsManifest } from '@/composables/useHlsManifest'
 import VoicePickerModal from '@/components/molecules/VoicePickerModal.vue'
+import { useResourceService } from '@/composables/useResourceService'
 
 const route = useRoute()
 const router = useRouter()
@@ -199,7 +200,8 @@ const manifest = ref<{ video: Track[]; audio: Track[]; captions: Track[] }>({
   audio: [],
   captions: [],
 })
-const { loadFromMock } = useHlsManifest()
+const { data: hlsData, loadFromUrl, loadFromMock } = useHlsManifest()
+const api = useResourceService()
 const captionSegments = ref<{ id: string; start: number; end: number; text: string }[]>([])
 
 const titleText = computed(() => `Title ${titleId.value} / Media ${mediaId.value}`)
@@ -287,35 +289,90 @@ const mockVoices = ref([
   { id: 'gcp-en-us-wavenet-d', name: 'Wavenet D', provider: 'GCP' },
 ])
 
-onMounted(() => {
-  // mock manifest
-  const loaded = editor.loadFromLocal()
-  manifest.value = loaded
-    ? editor.manifest
-    : {
-        video: [
-          { id: 'v-1080p', label: '1080p', url: 'https://cdn.test/video/1080.m3u8' },
-          { id: 'v-720p', label: '720p', url: 'https://cdn.test/video/720.m3u8' },
-        ],
-        audio: [
-          { id: 'a-orig-en', label: 'Original EN', lang: 'en' },
-          { id: 'a-dub-es', label: 'Dubbed ES', lang: 'es' },
-        ],
-        captions: [
-          { id: 'c-orig-en', label: 'Captions EN', lang: 'en' },
-          { id: 'c-trans-es', label: 'Captions ES (translated)', lang: 'es' },
-        ],
+onMounted(async () => {
+  // Try to load media details from backend first
+  const loadedLocal = editor.loadFromLocal()
+  try {
+    const media = (await api.getById('media', mediaId.value)) as Record<string, unknown>
+    const url = String(
+      (media as Record<string, unknown>)?.fileUrl || (media as Record<string, unknown>)?.url || '',
+    )
+    const format = String((media as Record<string, unknown>)?.format || '')
+    const contentType = String((media as Record<string, unknown>)?.contentType || '')
+
+    const isHls =
+      /m3u8/i.test(url) ||
+      /application\/vnd\.apple\.mpegurl/i.test(contentType) ||
+      /m3u8/i.test(format)
+    const isMp4Detected = /mp4/i.test(url) || /mp4/i.test(contentType) || /mp4/i.test(format)
+
+    ;(isMp4 as unknown as { value: boolean }).value = !isHls && isMp4Detected
+
+    if (isHls && url) {
+      await loadFromUrl(url)
+      const parsed = hlsData.value
+      manifest.value = {
+        video: parsed.video.map((t, i) => ({ id: t.id || `v-${i}`, label: t.label, url: t.url })),
+        audio: parsed.audio.map((t, i) => ({ id: t.id || `a-${i}`, label: t.label, lang: t.lang })),
+        captions: parsed.captions.map((t, i) => ({
+          id: t.id || `c-${i}`,
+          label: t.label,
+          lang: t.lang,
+        })),
       }
-  loadFromMock({
-    video: manifest.value.video.map((v) => ({ ...v, kind: 'video' })),
-    audio: manifest.value.audio.map((a) => ({ ...a, kind: 'audio' })),
-    captions: manifest.value.captions.map((c) => ({ ...c, kind: 'captions' })),
-  })
-  editor.setManifest({
-    video: manifest.value.video.map((v) => ({ ...v, kind: 'video' })),
-    audio: manifest.value.audio.map((a) => ({ ...a, kind: 'audio' })),
-    captions: manifest.value.captions.map((c) => ({ ...c, kind: 'captions' })),
-  })
+    } else if (url) {
+      // Assume MP4 or other progressive source
+      manifest.value = {
+        video: [{ id: 'v-src', label: 'Source', url }],
+        audio: [],
+        captions: [],
+      }
+    }
+
+    if (manifest.value.video.length > 0) {
+      editor.setManifest({
+        video: manifest.value.video.map((v) => ({ ...v, kind: 'video' })),
+        audio: manifest.value.audio.map((a) => ({ ...a, kind: 'audio' })),
+        captions: manifest.value.captions.map((c) => ({ ...c, kind: 'captions' })),
+      })
+      return
+    }
+  } catch {
+    // ignore and fall back
+  }
+
+  // Fallback to previously saved working copy or mock
+  if (!loadedLocal) {
+    manifest.value = {
+      video: [
+        { id: 'v-1080p', label: '1080p', url: 'https://cdn.test/video/1080.m3u8' },
+        { id: 'v-720p', label: '720p', url: 'https://cdn.test/video/720.m3u8' },
+      ],
+      audio: [
+        { id: 'a-orig-en', label: 'Original EN', lang: 'en' },
+        { id: 'a-dub-es', label: 'Dubbed ES', lang: 'es' },
+      ],
+      captions: [
+        { id: 'c-orig-en', label: 'Captions EN', lang: 'en' },
+        { id: 'c-trans-es', label: 'Captions ES (translated)', lang: 'es' },
+      ],
+    }
+  } else {
+    manifest.value = editor.manifest
+  }
+
+  if (manifest.value.video.length > 0) {
+    loadFromMock({
+      video: manifest.value.video.map((v) => ({ ...v, kind: 'video' })),
+      audio: manifest.value.audio.map((a) => ({ ...a, kind: 'audio' })),
+      captions: manifest.value.captions.map((c) => ({ ...c, kind: 'captions' })),
+    })
+    editor.setManifest({
+      video: manifest.value.video.map((v) => ({ ...v, kind: 'video' })),
+      audio: manifest.value.audio.map((a) => ({ ...a, kind: 'audio' })),
+      captions: manifest.value.captions.map((c) => ({ ...c, kind: 'captions' })),
+    })
+  }
 })
 
 function onSegmentUpdate(id: string, text: string) {
