@@ -42,6 +42,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import Icon from './Icon.vue'
 
 interface Props {
   /** Icon name from unplugin-icons */

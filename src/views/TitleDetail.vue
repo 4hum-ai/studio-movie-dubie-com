@@ -45,10 +45,10 @@ const route = useRoute()
 const router = useRouter()
 const stale = useStaleStore()
 
-const id = computed(() => String(route.params.id || ''))
+const id = computed(() => String(route.params.id || route.params._id || route.params.slug || ''))
 
 const item = ref<Record<string, unknown> | null>(null)
-const { get: getUiConfig } = useUiConfig()
+const { get: getUiConfig, state: uiState } = useUiConfig()
 const uiConfig = ref<UiConfig | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -66,6 +66,12 @@ async function load() {
       currentAbort?.abort()
       currentAbort = new AbortController()
       uiConfig.value = await getUiConfig('titles', { signal: currentAbort.signal })
+      if (!uiConfig.value && !uiState.initialized) {
+        // Initialize configs if not yet loaded
+        const { init } = useUiConfig()
+        await init({ force: true })
+        uiConfig.value = await getUiConfig('titles', { signal: currentAbort.signal })
+      }
     }
     currentAbort?.abort()
     currentAbort = new AbortController()
