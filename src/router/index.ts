@@ -3,7 +3,8 @@ import type { RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { genericRoutes } from './generic'
 import { customRoutes } from './custom'
-const routes: RouteRecordRaw[] = [...genericRoutes, ...customRoutes]
+// Ensure custom routes take precedence over generic catch-alls
+const routes: RouteRecordRaw[] = [...customRoutes, ...genericRoutes]
 
 const router = createRouter({
   history: createWebHistory(),
