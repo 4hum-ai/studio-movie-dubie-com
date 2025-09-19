@@ -19,7 +19,6 @@ export const useEditorStore = defineStore('editor', () => {
   const titleId = ref<string>('')
   const mediaId = ref<string>('')
 
-  const manifest = ref<HlsManifest>({ video: [], audio: [], captions: [] })
   const workingCopy = ref<HlsManifest>({ video: [], audio: [], captions: [] })
 
   const selectedVideoId = ref<string>('')
@@ -27,8 +26,6 @@ export const useEditorStore = defineStore('editor', () => {
   const selectedCaptionId = ref<string>('')
 
   const hasUnsaved = ref<boolean>(false)
-  const isMp4 = ref<boolean>(false)
-
   const jobs = ref<{ id: string; label: string; progress: number }[]>([])
 
   const selectedVideo = computed(
@@ -47,7 +44,6 @@ export const useEditorStore = defineStore('editor', () => {
   }
 
   function setManifest(next: HlsManifest) {
-    manifest.value = JSON.parse(JSON.stringify(next))
     workingCopy.value = JSON.parse(JSON.stringify(next))
     if (!selectedVideoId.value && workingCopy.value.video[0]) {
       selectedVideoId.value = workingCopy.value.video[0].id
@@ -83,7 +79,6 @@ export const useEditorStore = defineStore('editor', () => {
   }
 
   function commitWorkingCopy() {
-    manifest.value = JSON.parse(JSON.stringify(workingCopy.value))
     hasUnsaved.value = false
   }
 
@@ -134,7 +129,6 @@ export const useEditorStore = defineStore('editor', () => {
   return {
     titleId,
     mediaId,
-    manifest,
     workingCopy,
     selectedVideoId,
     selectedAudioId,
@@ -143,7 +137,6 @@ export const useEditorStore = defineStore('editor', () => {
     selectedAudio,
     selectedCaption,
     hasUnsaved,
-    isMp4,
     jobs,
     initialize,
     setManifest,
