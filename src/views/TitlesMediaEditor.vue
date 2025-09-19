@@ -181,9 +181,8 @@ import Button from '@/components/atoms/Button.vue'
 import VideoPlayer from '@/components/organisms/VideoPlayer.vue'
 import CaptionEditor from '@/components/molecules/CaptionEditor.vue'
 import { useEditorStore } from '@/stores/editor'
-import { useHlsManifest } from '@/composables/useHlsManifest'
+import { useMediaEditor } from '@/composables/useMediaEditor'
 import VoicePickerModal from '@/components/molecules/VoicePickerModal.vue'
-import { useResourceService } from '@/composables/useResourceService'
 
 const route = useRoute()
 const router = useRouter()
@@ -193,27 +192,17 @@ const mediaId = computed(() => String(route.params.mediaId || ''))
 
 const editor = useEditorStore()
 editor.initialize({ titleId: titleId.value, mediaId: mediaId.value })
-const isMp4 = editor.isMp4
+const mediaEditor = useMediaEditor(mediaId.value)
+const isMp4 = mediaEditor.isMp4
 const hasUnsaved = editor.hasUnsaved
-const selectedAudioId = ref<string | null>(null)
-const selectedCaptionId = ref<string | null>(null)
-const selectedVideoId = ref<string | null>(null)
-
-type Track = { id: string; label: string; lang?: string; url?: string; kind?: string }
-const manifest = ref<{ video: Track[]; audio: Track[]; captions: Track[] }>({
-  video: [],
-  audio: [],
-  captions: [],
-})
-const { data: hlsData, loadFromUrl, loadFromMock } = useHlsManifest()
-const api = useResourceService()
-const captionSegments = ref<{ id: string; start: number; end: number; text: string }[]>([])
+const selectedAudioId = mediaEditor.selectedAudioId
+const selectedCaptionId = mediaEditor.selectedCaptionId
+const selectedVideoId = mediaEditor.selectedVideoId
+const manifest = mediaEditor.manifest
+const captionSegments = mediaEditor.currentCaptionSegments
 
 const titleText = computed(() => `Title ${titleId.value} / Media ${mediaId.value}`)
-const playerSrc = computed(() => {
-  const byId = manifest.value.video.find((v) => v.id === selectedVideoId.value)?.url
-  return byId || manifest.value.video[0]?.url || ''
-})
+const playerSrc = mediaEditor.sourceUrl
 
 function goBack() {
   router.back()
@@ -229,20 +218,20 @@ async function updateManifest() {
 }
 
 function saveLocal() {
-  editor.persistToLocal()
+  mediaEditor.saveLocal()
 }
 
 function selectVideo(id: string) {
   selectedVideoId.value = id
-  editor.selectVideo(id)
+  mediaEditor.selectVideo(id)
 }
 function selectAudio(id: string) {
   selectedAudioId.value = id
-  editor.selectAudio(id)
+  mediaEditor.selectAudio(id)
 }
 function selectCaption(id: string) {
   selectedCaptionId.value = id
-  editor.selectCaption(id)
+  mediaEditor.selectCaption(id)
 }
 
 function createDubbing() {
@@ -263,11 +252,8 @@ function createDubbingFrom(_audioId: string) {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function translateCaptionFrom(_captionId: string) {
   // mock translate
-  captionSegments.value = [
-    { id: '1', start: 0, end: 2.5, text: 'Hello world' },
-    { id: '2', start: 2.5, end: 5.0, text: 'This is a translated caption.' },
-    { id: '3', start: 5.0, end: 8.0, text: 'Edit me inline.' },
-  ]
+  const t = manifest.value.captions.find((c) => c.id === selectedCaptionId.value)
+  if (t) void mediaEditor.loadCaptionSegments(t)
 }
 function createTranslatedCaption() {
   // mock translate from currently selected caption
@@ -282,7 +268,7 @@ function uploadTrack() {
   editor.addTrack({ id: newId, label: 'New Dub (mock)', lang: 'es', kind: 'audio' })
 }
 function transcodeToHls() {
-  // mock transcode
+  void mediaEditor.transcodeToHls()
 }
 
 const jobs = ref<{ id: string; label: string; progress: number }[]>([])
@@ -294,118 +280,11 @@ const mockVoices = ref([
   { id: 'gcp-en-us-wavenet-d', name: 'Wavenet D', provider: 'GCP' },
 ])
 
-onMounted(async () => {
-  // Try to load media details from backend first
-  const loadedLocal = editor.loadFromLocal()
-  try {
-    const media = (await api.getById('media', mediaId.value)) as Record<string, unknown>
-    const url = String(
-      (media as Record<string, unknown>)?.fileUrl || (media as Record<string, unknown>)?.url || '',
-    )
-    const format = String((media as Record<string, unknown>)?.format || '')
-    const contentType = String((media as Record<string, unknown>)?.contentType || '')
-
-    const getExt = (u: string): string => {
-      if (!u) return ''
-      const clean = u.split('?')[0]
-      const last = clean.split('.').pop() || ''
-      return last.toLowerCase()
-    }
-    const ext = getExt(url)
-
-    // Primary detection: use URL extension from media record
-    const isHls = ext === 'm3u8'
-    const isMp4Detected = ext === 'mp4'
-
-    // Secondary hints if extension missing
-    const isHlsHint =
-      /m3u8/i.test(url) ||
-      /application\/vnd\.apple\.mpegurl/i.test(contentType) ||
-      /m3u8/i.test(format)
-    const isMp4Hint = /mp4/i.test(url) || /mp4/i.test(contentType) || /mp4/i.test(format)
-
-    const finalIsHls = isHls || (!isMp4Detected && isHlsHint)
-    const finalIsMp4 = isMp4Detected || (!finalIsHls && isMp4Hint)
-
-    console.debug('[Editor] media detection', {
-      url,
-      format,
-      contentType,
-      ext,
-      finalIsHls,
-      finalIsMp4,
-    })
-    ;(isMp4 as unknown as { value: boolean }).value = finalIsMp4
-
-    if (finalIsHls && url) {
-      await loadFromUrl(url)
-      const parsed = hlsData.value
-      manifest.value = {
-        video: parsed.video.map((t, i) => ({ id: t.id || `v-${i}`, label: t.label, url: t.url })),
-        audio: parsed.audio.map((t, i) => ({ id: t.id || `a-${i}`, label: t.label, lang: t.lang })),
-        captions: parsed.captions.map((t, i) => ({
-          id: t.id || `c-${i}`,
-          label: t.label,
-          lang: t.lang,
-        })),
-      }
-    } else if (finalIsMp4 && url) {
-      // Assume MP4 or other progressive source
-      manifest.value = {
-        video: [{ id: 'v-src', label: 'Source', url }],
-        audio: [],
-        captions: [],
-      }
-    }
-
-    if (manifest.value.video.length > 0) {
-      editor.setManifest({
-        video: manifest.value.video.map((v) => ({ ...v, kind: 'video' })),
-        audio: manifest.value.audio.map((a) => ({ ...a, kind: 'audio' })),
-        captions: manifest.value.captions.map((c) => ({ ...c, kind: 'captions' })),
-      })
-      return
-    }
-  } catch {
-    // ignore and fall back
-  }
-
-  // Fallback to previously saved working copy or mock
-  if (!loadedLocal) {
-    manifest.value = {
-      video: [
-        { id: 'v-1080p', label: '1080p', url: 'https://cdn.test/video/1080.m3u8' },
-        { id: 'v-720p', label: '720p', url: 'https://cdn.test/video/720.m3u8' },
-      ],
-      audio: [
-        { id: 'a-orig-en', label: 'Original EN', lang: 'en' },
-        { id: 'a-dub-es', label: 'Dubbed ES', lang: 'es' },
-      ],
-      captions: [
-        { id: 'c-orig-en', label: 'Captions EN', lang: 'en' },
-        { id: 'c-trans-es', label: 'Captions ES (translated)', lang: 'es' },
-      ],
-    }
-  } else {
-    manifest.value = editor.manifest
-  }
-
-  if (manifest.value.video.length > 0) {
-    loadFromMock({
-      video: manifest.value.video.map((v) => ({ ...v, kind: 'video' })),
-      audio: manifest.value.audio.map((a) => ({ ...a, kind: 'audio' })),
-      captions: manifest.value.captions.map((c) => ({ ...c, kind: 'captions' })),
-    })
-    editor.setManifest({
-      video: manifest.value.video.map((v) => ({ ...v, kind: 'video' })),
-      audio: manifest.value.audio.map((a) => ({ ...a, kind: 'audio' })),
-      captions: manifest.value.captions.map((c) => ({ ...c, kind: 'captions' })),
-    })
-  }
+onMounted(() => {
+  /* useMediaEditor autoloads via mediaId */
 })
 
 function onSegmentUpdate(id: string, text: string) {
-  const idx = captionSegments.value.findIndex((s) => s.id === id)
-  if (idx !== -1) captionSegments.value[idx] = { ...captionSegments.value[idx], text }
+  mediaEditor.updateCaptionSegment(id, { text })
 }
 </script>
