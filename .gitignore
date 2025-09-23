@@ -168,3 +168,4 @@ storybook-static/
 # PWA
 sw.js
 workbox-*.js
+.env

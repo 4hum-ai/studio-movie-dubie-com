@@ -362,8 +362,9 @@ export function useGoogleWorkflow(name: string = 'workflows'): GoogleWorkflowSer
     try {
       const search = query ? toSearchParams(query) : new URLSearchParams()
       const q = search.toString()
-      const path = q ? `${buildPath('workflows')}?${q}` : buildPath('workflows')
-
+      // const path = q ? `${buildPath('workflows')}?${q}` : buildPath('workflows')
+      const path = q
+      console.log('path', path)
       const payload = (await request<unknown>(path, { signal })) as Record<string, unknown>
       const workflowsList = (payload.workflows as Workflow[]) || []
 
@@ -656,9 +657,9 @@ export function useGoogleWorkflow(name: string = 'workflows'): GoogleWorkflowSer
     setLoading(operation, true)
     error.value = null
     try {
-      const path = buildPath('executions', workflowId)
+      // const path = buildPath('executions', workflowId)
       const body = argument ? { argument: JSON.stringify(argument) } : {}
-      const result = await request<WorkflowExecution>(path, {
+      const result = await request<WorkflowExecution>(`${workflowId}/executions`, {
         method: 'POST',
         body: JSON.stringify(body),
         signal,

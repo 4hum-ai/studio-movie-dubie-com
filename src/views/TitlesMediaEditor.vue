@@ -76,9 +76,15 @@
             </div>
             <div class="flex items-center gap-2">
               <Button size="sm" variant="secondary" @click="uploadTrack">Upload Track</Button>
-              <Button size="sm" variant="secondary" v-if="isMp4" @click="transcodeToHls"
-                >Transcode to HLS</Button
+              <Button
+                size="sm"
+                variant="secondary"
+                v-if="isMp4"
+                :disabled="isTranscoding"
+                @click="transcodeToHls"
               >
+                {{ isTranscoding ? 'Transcoding...' : 'Transcode to HLS' }}
+              </Button>
             </div>
           </div>
         </Card>
@@ -119,8 +125,14 @@
               >Create Translated Caption</Button
             >
             <div class="pt-2">
-              <Button v-if="isMp4" size="sm" variant="secondary" @click="transcodeToHls">
-                Transcode to HLS
+              <Button
+                v-if="isMp4"
+                size="sm"
+                variant="secondary"
+                :disabled="isTranscoding"
+                @click="transcodeToHls"
+              >
+                {{ isTranscoding ? 'Transcoding...' : 'Transcode to HLS' }}
               </Button>
             </div>
             <div class="pt-2">
@@ -146,11 +158,30 @@
             <h3 class="text-sm font-semibold">Jobs</h3>
           </div>
           <div class="p-3 text-sm text-gray-500">
-            <p v-if="jobs.length === 0">No jobs yet.</p>
+            <p v-if="transcodingJobs.length === 0">No jobs yet.</p>
             <ul v-else class="space-y-2">
-              <li v-for="j in jobs" :key="j.id" class="flex items-center justify-between">
-                <span>{{ j.label }}</span>
-                <span>{{ j.progress }}%</span>
+              <li
+                v-for="j in transcodingJobs"
+                :key="j.id"
+                class="flex items-center justify-between"
+              >
+                <div class="flex flex-col">
+                  <span>{{ j.label }}</span>
+                  <span class="text-xs text-gray-400 capitalize">{{ j.status }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span>{{ j.progress }}%</span>
+                  <div class="h-2 w-8 overflow-hidden rounded-full bg-gray-200">
+                    <div
+                      class="h-full bg-blue-500 transition-all duration-300"
+                      :class="{
+                        'bg-green-500': j.status === 'completed',
+                        'bg-red-500': j.status === 'failed',
+                      }"
+                      :style="{ width: `${j.progress}%` }"
+                    ></div>
+                  </div>
+                </div>
               </li>
             </ul>
           </div>
@@ -200,6 +231,8 @@ const selectedCaptionId = mediaEditor.selectedCaptionId
 const selectedVideoId = mediaEditor.selectedVideoId
 const manifest = mediaEditor.manifest
 const captionSegments = mediaEditor.currentCaptionSegments
+const transcodingJobs = mediaEditor.transcodingJobs
+const isTranscoding = mediaEditor.isTranscoding
 
 const titleText = computed(() => `Title ${titleId.value} / Media ${mediaId.value}`)
 const playerSrc = mediaEditor.sourceUrl
@@ -235,15 +268,8 @@ function selectCaption(id: string) {
 }
 
 function createDubbing() {
-  // mock job
-  jobs.value.push({ id: String(Date.now()), label: 'Dubbing', progress: 0 })
-  const id = jobs.value[jobs.value.length - 1].id
-  const timer = setInterval(() => {
-    const j = jobs.value.find((x) => x.id === id)
-    if (!j) return clearInterval(timer)
-    j.progress = Math.min(100, j.progress + 10)
-    if (j.progress >= 100) clearInterval(timer)
-  }, 800)
+  // TODO: Implement real dubbing workflow
+  console.log('Create dubbing functionality not yet implemented')
 }
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function createDubbingFrom(_audioId: string) {
@@ -267,11 +293,14 @@ function uploadTrack() {
   const newId = `a-new-${Date.now()}`
   editor.addTrack({ id: newId, label: 'New Dub (mock)', lang: 'es', kind: 'audio' })
 }
-function transcodeToHls() {
-  void mediaEditor.transcodeToHls()
+async function transcodeToHls() {
+  try {
+    await mediaEditor.transcodeToHls()
+  } catch (error) {
+    console.error('Failed to start transcoding:', error)
+  }
 }
 
-const jobs = ref<{ id: string; label: string; progress: number }[]>([])
 const showVoicePicker = ref(false)
 const mockVoices = ref([
   { id: '11labs-jane', name: 'Jane', provider: 'ElevenLabs' },

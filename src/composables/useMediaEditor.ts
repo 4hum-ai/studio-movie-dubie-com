@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { useResourceService } from '@/composables/useResourceService'
 import { useHlsManifest } from '@/composables/useHlsManifest'
+import { useGoogleWorkflow } from '@/composables/useGoogleWorkflow'
 
 export type Track = {
   id: string
@@ -14,17 +15,116 @@ export type Manifest = { video: Track[]; audio: Track[]; captions: Track[] }
 
 export type CaptionSegment = { id: string; start: number; end: number; text: string }
 
+export type VideoTier = {
+  name: string
+  resolution: string
+  bitrate: string
+  codec: string
+  profile: string
+}
+
+export type AudioTier = {
+  name: string
+  bitrate: string
+  codec: string
+  channels: number
+}
+
+export type SpriteConfig = {
+  enabled: boolean
+  width: number
+  height: number
+  interval: number
+  columns: number
+  rows: number
+}
+
+export type TranscodeJob = {
+  id: string
+  label: string
+  progress: number
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  workflowExecutionId?: string
+}
+
 export function useMediaEditor(mediaId: string, options: { autoLoad?: boolean } = {}) {
   const { autoLoad = true } = options
 
   const api = useResourceService()
   const { data: hlsData, loadFromUrl } = useHlsManifest()
+  const workflowApi = useGoogleWorkflow()
 
   // Core state
   const media = ref<Record<string, unknown> | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
   const manifest = ref<Manifest>({ video: [], audio: [], captions: [] })
+
+  // Transcoding state
+  const transcodingJobs = ref<TranscodeJob[]>([])
+  const isTranscoding = ref(false)
+
+  // Default transcoding configuration
+  const defaultVideoTiers: VideoTier[] = [
+    {
+      name: '1080p',
+      resolution: '1920x1080',
+      bitrate: '4000k',
+      codec: 'h264',
+      profile: 'high',
+    },
+    {
+      name: '720p',
+      resolution: '1280x720',
+      bitrate: '2000k',
+      codec: 'h264',
+      profile: 'main',
+    },
+    {
+      name: '480p',
+      resolution: '854x480',
+      bitrate: '1000k',
+      codec: 'h264',
+      profile: 'main',
+    },
+    {
+      name: '360p',
+      resolution: '640x360',
+      bitrate: '500k',
+      codec: 'h264',
+      profile: 'baseline',
+    },
+  ]
+
+  const defaultAudioTiers: AudioTier[] = [
+    {
+      name: 'high',
+      bitrate: '192k',
+      codec: 'aac',
+      channels: 2,
+    },
+    {
+      name: 'medium',
+      bitrate: '128k',
+      codec: 'aac',
+      channels: 2,
+    },
+    {
+      name: 'low',
+      bitrate: '96k',
+      codec: 'aac',
+      channels: 2,
+    },
+  ]
+
+  const defaultSpriteConfig: SpriteConfig = {
+    enabled: true,
+    width: 160,
+    height: 90,
+    interval: 10,
+    columns: 10,
+    rows: 10,
+  }
 
   // Selections (two-way friendly)
   const selectedVideoId = ref<string | null>(null)
@@ -177,9 +277,123 @@ export function useMediaEditor(mediaId: string, options: { autoLoad?: boolean } 
     captionSegmentsByLang.value[lang] = [...arr]
   }
 
-  async function transcodeToHls() {
-    // Phase 1 mock; Phase 2 integrate backend
-    /* no-op */
+  async function transcodeToHls(
+    options: {
+      videoTiers?: VideoTier[]
+      audioTiers?: AudioTier[]
+      spriteConfig?: SpriteConfig
+    } = {},
+  ) {
+    if (!mediaId || isTranscoding.value) return
+
+    const jobId = `transcode-${Date.now()}`
+    const job: TranscodeJob = {
+      id: jobId,
+      label: 'Transcoding to HLS',
+      progress: 0,
+      status: 'pending',
+    }
+
+    transcodingJobs.value.push(job)
+    isTranscoding.value = true
+
+    try {
+      // Build workflow arguments
+      const workflowArgs = {
+        source_media_id: mediaId,
+        video_tiers: options.videoTiers || defaultVideoTiers,
+        audio_tiers: options.audioTiers || defaultAudioTiers,
+        sprite_config: options.spriteConfig || defaultSpriteConfig,
+      }
+
+      // Update job status
+      const jobIndex = transcodingJobs.value.findIndex((j) => j.id === jobId)
+      if (jobIndex !== -1) {
+        transcodingJobs.value[jobIndex].status = 'running'
+        transcodingJobs.value[jobIndex].progress = 10
+      }
+
+      // Execute the workflow
+      const execution = await workflowApi.createExecution('transcode-to-hls-inplace', workflowArgs)
+
+      // Update job with execution ID
+      if (jobIndex !== -1) {
+        transcodingJobs.value[jobIndex].workflowExecutionId = execution.name.split('/').pop() || ''
+        transcodingJobs.value[jobIndex].progress = 20
+      }
+
+      // Start monitoring the execution
+      monitorTranscodeExecution(execution.name.split('/').pop() || '', jobId)
+    } catch (err) {
+      // Update job status to failed
+      const jobIndex = transcodingJobs.value.findIndex((j) => j.id === jobId)
+      if (jobIndex !== -1) {
+        transcodingJobs.value[jobIndex].status = 'failed'
+        transcodingJobs.value[jobIndex].progress = 0
+      }
+
+      error.value = (err as Error)?.message || 'Failed to start transcoding workflow'
+      isTranscoding.value = false
+      throw err
+    }
+  }
+
+  async function monitorTranscodeExecution(executionId: string, jobId: string) {
+    const jobIndex = transcodingJobs.value.findIndex((j) => j.id === jobId)
+    if (jobIndex === -1) return
+
+    const checkStatus = async () => {
+      try {
+        const execution = await workflowApi.getExecution('transcode-to-hls-inplace', executionId)
+
+        if (execution.state === 'SUCCEEDED') {
+          // Update job to completed
+          transcodingJobs.value[jobIndex].status = 'completed'
+          transcodingJobs.value[jobIndex].progress = 100
+          isTranscoding.value = false
+
+          // Reload the media to get updated manifest
+          await load()
+          return
+        }
+
+        if (execution.state === 'FAILED') {
+          // Update job to failed
+          transcodingJobs.value[jobIndex].status = 'failed'
+          transcodingJobs.value[jobIndex].progress = 0
+          isTranscoding.value = false
+          error.value = execution.error?.message || 'Transcoding workflow failed'
+          return
+        }
+
+        if (execution.state === 'CANCELLED') {
+          // Update job to failed
+          transcodingJobs.value[jobIndex].status = 'failed'
+          transcodingJobs.value[jobIndex].progress = 0
+          isTranscoding.value = false
+          error.value = 'Transcoding workflow was cancelled'
+          return
+        }
+
+        // Still running, update progress and check again
+        if (execution.state === 'ACTIVE') {
+          transcodingJobs.value[jobIndex].progress = Math.min(
+            90,
+            transcodingJobs.value[jobIndex].progress + 10,
+          )
+          setTimeout(checkStatus, 5000) // Check again in 5 seconds
+        }
+      } catch (err) {
+        // Update job to failed on monitoring error
+        transcodingJobs.value[jobIndex].status = 'failed'
+        transcodingJobs.value[jobIndex].progress = 0
+        isTranscoding.value = false
+        error.value = (err as Error)?.message || 'Failed to monitor transcoding progress'
+      }
+    }
+
+    // Start monitoring
+    setTimeout(checkStatus, 2000) // First check after 2 seconds
   }
 
   function saveLocal() {
@@ -225,6 +439,9 @@ export function useMediaEditor(mediaId: string, options: { autoLoad?: boolean } 
     captionLangs,
     captionSegmentsByLang,
     currentCaptionSegments,
+    // transcoding state
+    transcodingJobs,
+    isTranscoding,
     // actions
     load,
     parseHls: loadFromUrl,
