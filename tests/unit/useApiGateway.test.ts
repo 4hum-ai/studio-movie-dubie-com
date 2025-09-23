@@ -2,12 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { MockedFunction } from 'vitest'
 import { createApiClient } from '../../src/utils/useApiGateway'
 
-vi.mock('firebase/auth', () => ({
-  getAuth: vi.fn(() => ({
-    currentUser: {
-      getIdToken: vi.fn(async () => undefined),
-    },
-  })),
+// Mock the auth provider factory
+vi.mock('@/providers/authProviderFactory', () => ({
+  createDefaultAuthProvider: vi.fn(),
 }))
 
 vi.mock('@/composables/useToast', () => ({
@@ -60,13 +57,16 @@ describe('useApiGateway / createApiClient', () => {
   })
 
   it('joins URLs correctly and includes headers with token when available', async () => {
-    const { getAuth } = await import('firebase/auth')
-    const mockGetAuth = getAuth as MockedFunction<typeof getAuth>
-    mockGetAuth.mockReturnValue({
-      currentUser: {
-        getIdToken: vi.fn(async () => 'test-token'),
-      },
-    } as unknown as ReturnType<typeof getAuth>)
+    const { createDefaultAuthProvider } = await import('@/providers/authProviderFactory')
+    const mockCreateDefaultAuthProvider = createDefaultAuthProvider as MockedFunction<
+      typeof createDefaultAuthProvider
+    >
+
+    const mockProvider = {
+      getIdToken: vi.fn(async () => 'test-token'),
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockCreateDefaultAuthProvider.mockResolvedValue(mockProvider as any)
 
     const fetchSpy = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
     globalThis.fetch = fetchSpy
@@ -91,24 +91,19 @@ describe('useApiGateway / createApiClient', () => {
   })
 
   it('retries once on 401 with refreshed token', async () => {
-    const { getAuth } = await import('firebase/auth')
-    const getIdToken = vi.fn().mockResolvedValueOnce('old-token').mockResolvedValueOnce('new-token')
-    // For forced refresh path
-    const getIdTokenForce = vi.fn(async () => 'new-token')
+    const { createDefaultAuthProvider } = await import('@/providers/authProviderFactory')
+    const mockCreateDefaultAuthProvider = createDefaultAuthProvider as MockedFunction<
+      typeof createDefaultAuthProvider
+    >
 
-    const mockGetAuth = getAuth as MockedFunction<typeof getAuth>
-    mockGetAuth.mockReturnValue({
-      currentUser: {
-        getIdToken,
-      },
-    } as unknown as ReturnType<typeof getAuth>)
-
-    mockGetAuth.mockImplementationOnce(
-      () =>
-        ({
-          currentUser: { getIdToken: getIdTokenForce },
-        }) as unknown as ReturnType<typeof getAuth>,
-    )
+    const mockProvider = {
+      getIdToken: vi
+        .fn()
+        .mockResolvedValueOnce('old-token') // First call (buildAuthHeader)
+        .mockResolvedValueOnce('new-token'), // Second call (retry with force refresh)
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockCreateDefaultAuthProvider.mockResolvedValue(mockProvider as any)
 
     const fetchSpy = vi
       .fn()

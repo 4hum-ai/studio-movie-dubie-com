@@ -1,58 +1,16 @@
 import { ref, readonly, computed } from 'vue'
-import { initializeApp, type FirebaseApp } from 'firebase/app'
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  GithubAuthProvider,
-  OAuthProvider,
-  signInWithPopup,
-  getAdditionalUserInfo,
-  setPersistence,
-  browserLocalPersistence,
-  browserSessionPersistence,
-  type User as FirebaseUser,
-  AuthProvider,
-} from 'firebase/auth'
+import type { AuthUser } from '@/types/auth'
+import { createDefaultAuthProvider } from '@/providers/authProviderFactory'
+import type { AuthProvider } from '@/types/auth'
 
-export interface AuthUser {
-  /** Unique user identifier */
-  id: string
-  /** User's email address */
-  email: string
-  /** User's display name (optional) */
-  displayName?: string
-  /** URL to user's profile photo (optional) */
-  photoURL?: string
-}
+// Global provider instance
+let authProvider: AuthProvider | null = null
 
-const firebaseConfig = {
-  apiKey: (import.meta as { env?: Record<string, unknown> }).env?.VITE_FIREBASE_API_KEY as string,
-  authDomain: (import.meta as { env?: Record<string, unknown> }).env
-    ?.VITE_FIREBASE_AUTH_DOMAIN as string,
-  projectId: (import.meta as { env?: Record<string, unknown> }).env
-    ?.VITE_FIREBASE_PROJECT_ID as string,
-  storageBucket: (import.meta as { env?: Record<string, unknown> }).env
-    ?.VITE_FIREBASE_STORAGE_BUCKET as string,
-  messagingSenderId: (import.meta as { env?: Record<string, unknown> }).env
-    ?.VITE_FIREBASE_MESSAGING_SENDER_ID as string,
-  appId: (import.meta as { env?: Record<string, unknown> }).env?.VITE_FIREBASE_APP_ID as string,
-}
-
-let app: FirebaseApp | null = null
-let authInstance: ReturnType<typeof getAuth> | null = null
-
-function ensureAuthInitialized() {
-  if (!app) {
-    app = initializeApp(firebaseConfig)
+async function getAuthProvider(): Promise<AuthProvider> {
+  if (!authProvider) {
+    authProvider = await createDefaultAuthProvider()
   }
-  if (!authInstance) {
-    authInstance = getAuth(app)
-    void setPersistence(authInstance, browserLocalPersistence).catch(() => {})
-  }
-  return authInstance
+  return authProvider
 }
 
 export function useAuth() {
@@ -60,52 +18,52 @@ export function useAuth() {
   const error = ref<string | null>(null)
   const user = ref<AuthUser | null>(null)
 
-  const convertFirebaseUser = (firebaseUser: FirebaseUser): AuthUser => {
-    return {
-      id: firebaseUser.uid,
-      email: firebaseUser.email || '',
-      displayName: firebaseUser.displayName || undefined,
-      photoURL: firebaseUser.photoURL || undefined,
+  const getCurrentUser = async (): Promise<AuthUser | null> => {
+    try {
+      const provider = await getAuthProvider()
+      const currentUser = await provider.getCurrentUser()
+      user.value = currentUser
+      isLoading.value = false
+      return currentUser
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to get current user'
+      error.value = message
+      isLoading.value = false
+      throw new Error(message)
     }
   }
 
-  const getCurrentUser = async (): Promise<AuthUser | null> => {
-    const auth = ensureAuthInitialized()
-    return new Promise((resolve) => {
-      const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-        if (firebaseUser) {
-          const converted = convertFirebaseUser(firebaseUser)
-          user.value = converted
-          resolve(converted)
-        } else {
-          user.value = null
-          resolve(null)
-        }
-        isLoading.value = false
-        unsubscribe()
-      })
-    })
-  }
-
   const subscribe = (cb: (u: AuthUser | null) => void): (() => void) => {
-    const auth = ensureAuthInitialized()
-    const off = onAuthStateChanged(auth, (firebaseUser) => {
-      const converted = firebaseUser ? convertFirebaseUser(firebaseUser) : null
-      user.value = converted
-      cb(converted)
-      isLoading.value = false
-    })
-    return off
+    let unsubscribe: (() => void) | null = null
+
+    getAuthProvider()
+      .then((provider) => {
+        unsubscribe = provider.subscribe((authUser) => {
+          user.value = authUser
+          cb(authUser)
+          isLoading.value = false
+        })
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : 'Failed to subscribe to auth state'
+        error.value = message
+        isLoading.value = false
+      })
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe()
+      }
+    }
   }
 
   const login = async (email: string, password: string): Promise<AuthUser> => {
     try {
       error.value = null
-      const auth = ensureAuthInitialized()
-      const cred = await signInWithEmailAndPassword(auth, email, password)
-      const converted = convertFirebaseUser(cred.user)
-      user.value = converted
-      return converted
+      const provider = await getAuthProvider()
+      const authUser = await provider.login(email, password)
+      user.value = authUser
+      return authUser
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed'
       error.value = message
@@ -119,13 +77,10 @@ export function useAuth() {
   }> => {
     try {
       error.value = null
-      const auth = ensureAuthInitialized()
-      const provider = new GoogleAuthProvider()
-      const result = await signInWithPopup(auth, provider)
-      const converted = convertFirebaseUser(result.user)
-      const info = getAdditionalUserInfo(result)
-      user.value = converted
-      return { user: converted, newUser: info?.isNewUser }
+      const provider = await getAuthProvider()
+      const result = await provider.loginWithGoogle()
+      user.value = result.user
+      return result
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Google login failed'
       error.value = message
@@ -138,27 +93,10 @@ export function useAuth() {
   ): Promise<{ user: AuthUser; newUser?: boolean }> => {
     try {
       error.value = null
-      const auth = ensureAuthInitialized()
-      let providerInstance: GoogleAuthProvider | GithubAuthProvider | OAuthProvider
-      switch (providerName) {
-        case 'google':
-          providerInstance = new GoogleAuthProvider()
-          break
-        case 'github':
-          providerInstance = new GithubAuthProvider()
-          break
-        case 'microsoft':
-          providerInstance = new OAuthProvider('microsoft.com')
-          break
-        case 'apple':
-          providerInstance = new OAuthProvider('apple.com')
-          break
-      }
-      const result = await signInWithPopup(auth, providerInstance as AuthProvider)
-      const converted = convertFirebaseUser(result.user)
-      const info = getAdditionalUserInfo(result)
-      user.value = converted
-      return { user: converted, newUser: info?.isNewUser }
+      const provider = await getAuthProvider()
+      const result = await provider.loginWithOAuth(providerName)
+      user.value = result.user
+      return result
     } catch (err) {
       const message = err instanceof Error ? err.message : 'OAuth login failed'
       error.value = message
@@ -169,8 +107,8 @@ export function useAuth() {
   const logout = async (): Promise<void> => {
     try {
       error.value = null
-      const auth = ensureAuthInitialized()
-      await signOut(auth)
+      const provider = await getAuthProvider()
+      await provider.logout()
       user.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Logout failed'
@@ -198,9 +136,14 @@ export function useAuth() {
    * ```
    */
   const setPersistenceMode = async (mode: 'local' | 'session') => {
-    const auth = ensureAuthInitialized()
-    const persistence = mode === 'local' ? browserLocalPersistence : browserSessionPersistence
-    await setPersistence(auth, persistence).catch(() => {})
+    try {
+      const provider = await getAuthProvider()
+      await provider.setPersistenceMode(mode)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to set persistence mode'
+      error.value = message
+      throw new Error(message)
+    }
   }
 
   return {

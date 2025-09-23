@@ -139,10 +139,17 @@ const handleProvider = async (provider: 'google' | 'github' | 'microsoft' | 'app
   try {
     isLoading.value = true
     error.value = ''
-    await authStore.loginWithProvider(provider)
+    console.log('🚀 Starting login with provider:', provider)
+    const result = await authStore.loginWithProvider(provider)
+    console.log('✅ Login result:', result)
+    console.log('👤 Auth store user:', authStore.user)
+    console.log('🔐 Is authenticated:', authStore.isAuthenticated)
+
     const redirectPath = (route.query.redirect as string) || '/'
+    console.log('🔄 Redirecting to:', redirectPath)
     router.push(redirectPath)
   } catch (err) {
+    console.error('❌ Login error:', err)
     error.value = err instanceof Error ? err.message : 'Login failed'
   } finally {
     isLoading.value = false
@@ -178,6 +185,11 @@ onMounted(async () => {
   if (authStore.isAuthenticated) {
     const redirectPath = (route.query.redirect as string) || '/'
     router.push(redirectPath)
+  } else {
+    // If not authenticated and no redirect parameter, add default redirect
+    if (!route.query.redirect) {
+      router.replace({ path: '/auth', query: { redirect: '/' } })
+    }
   }
 })
 </script>
