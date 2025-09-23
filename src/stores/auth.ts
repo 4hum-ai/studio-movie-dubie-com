@@ -75,10 +75,15 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       isLoading.value = true
       error.value = null
+      console.log('🔐 Auth store: Starting login with provider:', provider)
       const { user: loggedIn } = await loginWithOAuth(provider)
+      console.log('🔐 Auth store: Login successful, user:', loggedIn)
       user.value = loggedIn
+      console.log('🔐 Auth store: User state updated:', user.value)
+      console.log('🔐 Auth store: Is authenticated:', isAuthenticated.value)
       return loggedIn
     } catch (err) {
+      console.error('🔐 Auth store: Login failed:', err)
       error.value = err instanceof Error ? err.message : 'Login failed'
       throw err
     } finally {

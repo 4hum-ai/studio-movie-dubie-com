@@ -317,7 +317,7 @@ const onMenuSelect = async (key: string) => {
     toggleTheme()
   } else if (key === 'logout') {
     await auth.logoutUser()
-    await router.push({ name: 'Auth' })
+    await router.push({ name: 'Auth', query: { redirect: '/' } })
   }
 }
 

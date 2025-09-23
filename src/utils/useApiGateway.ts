@@ -1,4 +1,3 @@
-import { getAuth } from 'firebase/auth'
 import { useEventBus } from '@vueuse/core'
 import {
   EVENT_HTTP_ACTIVE,
@@ -6,6 +5,7 @@ import {
   type HttpActivePayload,
   type HttpErrorPayload,
 } from '@/types/events'
+import { createDefaultAuthProvider } from '@/providers/authProviderFactory'
 
 export interface ApiClientOptions {
   /** Base URL for the API */
@@ -44,9 +44,8 @@ function joinUrl(baseUrl: string, path: string): string {
 
 async function buildAuthHeader(): Promise<Record<string, string>> {
   try {
-    const auth = getAuth()
-    const firebaseUser = auth.currentUser
-    const token = await firebaseUser?.getIdToken()
+    const provider = await createDefaultAuthProvider()
+    const token = await provider.getIdToken()
     if (token) return { Authorization: `Bearer ${token}` }
   } catch {
     // Ignore auth header build failures; proceed without auth
@@ -129,7 +128,8 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
 
     if (response.status === 401) {
       try {
-        const refreshed = await getAuth().currentUser?.getIdToken(true)
+        const provider = await createDefaultAuthProvider()
+        const refreshed = await provider.getIdToken(true)
         if (refreshed) {
           const retryHeaders = {
             ...headers,

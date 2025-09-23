@@ -26,6 +26,11 @@ router.beforeEach(async (to, _from, next) => {
     next({ name: 'Auth', query: { redirect: to.fullPath } })
     return
   }
+  // Ensure auth page always has a redirect parameter
+  if (to.name === 'Auth' && !to.query.redirect) {
+    next({ name: 'Auth', query: { redirect: '/' } })
+    return
+  }
 
   const maybeResource = to.params?.module as string | undefined
   if (maybeResource) {
