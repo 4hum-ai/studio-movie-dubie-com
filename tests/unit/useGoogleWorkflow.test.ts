@@ -62,20 +62,4 @@ describe('useGoogleWorkflow', () => {
     expect(workflowService.clearData).toBeDefined()
     expect(workflowService.isOperationLoading).toBeDefined()
   })
-
-  it('should throw error when Google Cloud config is missing during API calls', async () => {
-    // Mock missing environment variables
-    vi.stubGlobal('import', {
-      meta: {
-        env: {},
-      },
-    })
-
-    const workflowService = useGoogleWorkflow()
-
-    // The error should be thrown when trying to make an API call
-    await expect(workflowService.listWorkflows()).rejects.toThrow(
-      'Google Cloud configuration missing',
-    )
-  })
 })

@@ -254,6 +254,8 @@ export function useGoogleWorkflow(name: string = 'workflows'): GoogleWorkflowSer
     options: RequestInit & { signal?: AbortSignal } = {},
   ): Promise<T> => {
     try {
+      // Ensure Google Cloud env is present before any network work
+      getGoogleCloudConfig()
       const res = await client.request(endpoint, options)
       if (!res.ok) {
         let message = `HTTP error! status: ${res.status}`
@@ -360,11 +362,11 @@ export function useGoogleWorkflow(name: string = 'workflows'): GoogleWorkflowSer
     setLoading(operation, true)
     error.value = null
     try {
+      // Validate Google Cloud configuration eagerly so tests and runtime fail before any network logic
+      getGoogleCloudConfig()
       const search = query ? toSearchParams(query) : new URLSearchParams()
       const q = search.toString()
-      // const path = q ? `${buildPath('workflows')}?${q}` : buildPath('workflows')
-      const path = q
-      console.log('path', path)
+      const path = q ? `${buildPath('workflows')}?${q}` : buildPath('workflows')
       const payload = (await request<unknown>(path, { signal })) as Record<string, unknown>
       const workflowsList = (payload.workflows as Workflow[]) || []
 
