@@ -1,5 +1,5 @@
 <template>
-  <div class="relative bg-black">
+  <div class="relative bg-black dark:bg-gray-900">
     <!-- Video Element -->
     <video
       ref="videoRef"
@@ -136,6 +136,35 @@
         </div>
 
         <div class="flex items-center gap-3">
+          <!-- Audio Track Selector -->
+          <div v-if="hasMultipleAudioTracks" class="relative">
+            <select
+              :value="currentAudioTrack?.id || ''"
+              @change="switchAudioTrack(($event.target as HTMLSelectElement).value)"
+              class="appearance-none rounded bg-black/50 px-2 py-1 text-xs text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            >
+              <option
+                v-for="track in availableAudioTracks"
+                :key="track.id"
+                :value="track.id"
+                class="bg-gray-800 text-white"
+              >
+                {{ track.label }}
+              </option>
+            </select>
+            <svg
+              class="absolute top-1/2 right-1 h-3 w-3 -translate-y-1/2 text-white"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                clip-rule="evenodd"
+              />
+            </svg>
+          </div>
+
           <!-- Subtitle Toggle -->
           <button
             v-if="subtitleUrl"
@@ -221,12 +250,17 @@ interface Props {
   url: string
   title?: string
   subtitleUrl?: string
+  audioTracks?: Array<{ id: string; label: string; lang?: string; url?: string }>
+  selectedAudioId?: string
   mode: 'modal' | 'inline'
 }
 
 const props = defineProps<Props>()
 // emit is used in the template for close button
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{
+  close: []
+  'audio-track-change': [trackId: string]
+}>()
 
 // CDN composable
 const { getCdnUrl } = useCdn()
@@ -257,6 +291,9 @@ const currentSubtitle = ref('')
 // HLS instance
 let hls: Hls | null = null
 
+// Audio track state
+const currentAudioTrackId = ref<string | null>(null)
+
 // Computed
 const isHLS = computed(() => props.url.includes('.m3u8') || props.url.includes('.m3u'))
 
@@ -264,6 +301,17 @@ const isHLS = computed(() => props.url.includes('.m3u8') || props.url.includes('
 const cdnVideoUrl = computed(() => {
   if (!props.url) return ''
   return getCdnUrl(props.url)
+})
+
+// Audio track computed properties
+const availableAudioTracks = computed(() => props.audioTracks || [])
+const hasMultipleAudioTracks = computed(() => availableAudioTracks.value.length > 1)
+const currentAudioTrack = computed(() => {
+  const trackId = currentAudioTrackId.value || props.selectedAudioId
+  return (
+    availableAudioTracks.value.find((track) => track.id === trackId) ||
+    availableAudioTracks.value[0]
+  )
 })
 
 // Methods
@@ -281,17 +329,104 @@ const initializeVideo = async () => {
         enableWorker: true,
         lowLatencyMode: true,
         backBufferLength: 90,
+        // Force audio track detection
+        forceKeyFrameOnDiscontinuity: true,
+        // Enable audio track switching
+        enableSoftwareAES: true,
+        // Debug mode to see what's happening
+        debug: true,
       })
+
+      // Debug: Log the manifest URL and content
+      console.log('Loading HLS from URL:', cdnVideoUrl.value)
+
+      // Try to fetch and log the actual manifest content
+      fetch(cdnVideoUrl.value)
+        .then((response) => response.text())
+        .then((manifestText) => {
+          console.log('Raw HLS manifest content:')
+          console.log(manifestText)
+        })
+        .catch((err) => console.log('Could not fetch manifest for debugging:', err))
 
       hls.loadSource(cdnVideoUrl.value)
       hls.attachMedia(video)
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         loading.value = false
+        console.log('HLS manifest parsed')
+        console.log('Available audio tracks from hls.js:', hls?.audioTracks)
+        console.log('Available audio tracks from props:', availableAudioTracks.value)
+        console.log('Current audio track index:', hls?.audioTrack)
+        console.log(
+          'Video element audio tracks:',
+          (video as HTMLVideoElement & { audioTracks?: unknown }).audioTracks,
+        )
+        console.log('HLS levels (video tracks):', hls?.levels)
+
+        // Debug: Try to manually create audio tracks if hls.js didn't detect them
+        if (
+          hls?.audioTracks &&
+          hls.audioTracks.length === 0 &&
+          availableAudioTracks.value.length > 0
+        ) {
+          console.log('HLS.js did not detect audio tracks, but we have them in props')
+          console.log('This suggests the m3u8-parser found audio tracks but hls.js did not')
+          console.log('Available audio tracks from m3u8-parser:', availableAudioTracks.value)
+
+          // The issue might be that hls.js needs the audio tracks to be loaded differently
+          // Let's try to manually trigger audio track loading by fetching the audio playlists
+          availableAudioTracks.value.forEach((track, index) => {
+            console.log(`Audio track ${index}:`, track)
+            if (track.url) {
+              // Try to fetch the audio playlist to see if it's accessible
+              fetch(track.url)
+                .then((response) => response.text())
+                .then((audioPlaylist) => {
+                  console.log(`Audio playlist ${index} content:`, audioPlaylist)
+                })
+                .catch((err) => console.log(`Could not fetch audio playlist ${index}:`, err))
+            }
+          })
+        }
+
+        // Wait a bit and check audio tracks again (sometimes they load after manifest parsing)
+        setTimeout(() => {
+          console.log('Delayed audio tracks check:', hls?.audioTracks)
+          if (hls?.audioTracks && hls.audioTracks.length > 0) {
+            console.log('Audio tracks found after delay!')
+          }
+        }, 1000)
+
+        // Set initial audio track if one is selected
+        if (props.selectedAudioId && hls?.audioTracks && hls.audioTracks.length > 0) {
+          console.log('Setting initial audio track:', props.selectedAudioId)
+          switchAudioTrack(props.selectedAudioId)
+        }
+
+        // Ensure video element is not muted and has proper audio settings
+        video.muted = false
+        video.volume = 1
+        console.log('Video element muted:', video.muted)
+        console.log('Video element volume:', video.volume)
+
         video.play().catch(() => {
           // Autoplay failed, but video is ready
           loading.value = false
         })
+      })
+
+      // Add audio track change event listener
+      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
+        console.log('Audio tracks updated:', hls?.audioTracks)
+      })
+
+      hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_event, data) => {
+        console.log('Audio track switched:', data)
+      })
+
+      hls.on(Hls.Events.AUDIO_TRACK_LOADED, (_event, data) => {
+        console.log('Audio track loaded:', data)
       })
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -338,6 +473,69 @@ const toggleMute = () => {
 
   videoRef.value.muted = !videoRef.value.muted
   isMuted.value = videoRef.value.muted
+}
+
+const switchAudioTrack = (trackId: string) => {
+  if (!videoRef.value) return
+
+  currentAudioTrackId.value = trackId
+  emit('audio-track-change', trackId)
+
+  if (isHLS.value && hls) {
+    // For HLS, switch audio track using hls.js
+    const audioTracks = hls.audioTracks
+    console.log('Available HLS audio tracks:', audioTracks)
+    console.log('Trying to switch to track ID:', trackId)
+
+    // Find the track by matching the label or URL
+    const selectedTrack = availableAudioTracks.value.find((track) => track.id === trackId)
+    if (selectedTrack) {
+      console.log('Selected track from manifest:', selectedTrack)
+
+      // Try to find matching HLS track by label or URL
+      const hlsTrackIndex = audioTracks.findIndex((hlsTrack) => {
+        return (
+          hlsTrack.name === selectedTrack.label ||
+          hlsTrack.url === selectedTrack.url ||
+          String(hlsTrack.id) === String(trackId)
+        )
+      })
+
+      if (hlsTrackIndex !== -1) {
+        console.log('Switching to HLS audio track index:', hlsTrackIndex)
+        hls.audioTrack = Number(hlsTrackIndex)
+
+        // Ensure video is not muted after switching
+        if (videoRef.value) {
+          videoRef.value.muted = false
+          videoRef.value.volume = 1
+          console.log('Audio track switched, video unmuted')
+        }
+      } else {
+        console.log('Could not find matching HLS audio track')
+        // Fallback: try to find by index if trackId contains a number
+        const indexMatch = trackId.match(/(\d+)$/)
+        if (indexMatch) {
+          const index = parseInt(indexMatch[1])
+          if (index >= 0 && index < audioTracks.length) {
+            console.log('Using fallback index:', index)
+            hls.audioTrack = Number(index)
+
+            // Ensure video is not muted after switching
+            if (videoRef.value) {
+              videoRef.value.muted = false
+              videoRef.value.volume = 1
+              console.log('Audio track switched via fallback, video unmuted')
+            }
+          }
+        }
+      }
+    }
+  } else {
+    // For regular video, we would need to handle this differently
+    // This would typically involve switching the video source or using multiple audio elements
+    console.log('Audio track switching for non-HLS video not yet implemented')
+  }
 }
 
 const toggleSubtitles = () => {
@@ -493,6 +691,16 @@ watch(
   () => {
     if (props.url) {
       initializeVideo()
+    }
+  },
+)
+
+// Watch for selectedAudioId changes
+watch(
+  () => props.selectedAudioId,
+  (newAudioId) => {
+    if (newAudioId && newAudioId !== currentAudioTrackId.value) {
+      switchAudioTrack(newAudioId)
     }
   },
 )

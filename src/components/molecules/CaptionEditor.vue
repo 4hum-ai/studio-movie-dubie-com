@@ -1,20 +1,20 @@
 <template>
   <div class="space-y-3">
     <div class="flex items-center justify-between">
-      <h3 class="text-sm font-semibold">Caption Editor</h3>
-      <div class="text-xs text-gray-500">{{ segments.length }} segments</div>
+      <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Caption Editor</h3>
+      <div class="text-xs text-gray-500 dark:text-gray-400">{{ segments.length }} segments</div>
     </div>
     <div class="max-h-[50vh] space-y-2 overflow-auto">
       <div
         v-for="seg in segments"
         :key="seg.id"
-        class="rounded border border-gray-200 p-2 dark:border-gray-700"
+        class="rounded border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-800"
       >
-        <div class="mb-1 text-[11px] text-gray-500">
+        <div class="mb-1 text-[11px] text-gray-500 dark:text-gray-400">
           {{ format(seg.start) }} - {{ format(seg.end) }}
         </div>
         <textarea
-          class="w-full rounded border border-gray-300 bg-white p-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+          class="w-full rounded border border-gray-300 bg-white p-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
           :value="seg.text"
           @input="onEdit(seg.id, ($event.target as HTMLTextAreaElement).value)"
           rows="2"

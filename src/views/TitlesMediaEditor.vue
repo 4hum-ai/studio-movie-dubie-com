@@ -22,28 +22,38 @@
       <div class="col-span-12 space-y-4 md:col-span-3">
         <Card>
           <div class="border-b border-gray-200 p-3 dark:border-gray-700">
-            <h3 class="text-sm font-semibold">Tracks</h3>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Tracks</h3>
           </div>
           <div class="space-y-4 p-3">
             <div>
-              <h4 class="text-xs font-semibold text-gray-500 uppercase">Video</h4>
+              <h4 class="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                Video
+              </h4>
               <ul class="mt-2 space-y-1">
                 <li v-for="v in manifest.video" :key="v.id">
-                  <button class="text-sm hover:underline" @click="selectVideo(v.id)">
+                  <button
+                    class="text-sm text-gray-700 hover:text-gray-900 hover:underline dark:text-gray-300 dark:hover:text-gray-100"
+                    @click="selectVideo(v.id)"
+                  >
                     {{ v.label }}
                   </button>
                 </li>
               </ul>
             </div>
             <div>
-              <h4 class="text-xs font-semibold text-gray-500 uppercase">Audio</h4>
+              <h4 class="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                Audio
+              </h4>
               <ul class="mt-2 space-y-1">
                 <li
                   v-for="a in manifest.audio"
                   :key="a.id"
                   class="flex items-center justify-between"
                 >
-                  <button class="text-sm hover:underline" @click="selectAudio(a.id)">
+                  <button
+                    class="text-sm text-gray-700 hover:text-gray-900 hover:underline dark:text-gray-300 dark:hover:text-gray-100"
+                    @click="selectAudio(a.id)"
+                  >
                     {{ a.label }}
                   </button>
                   <div class="flex items-center gap-2">
@@ -55,14 +65,19 @@
               </ul>
             </div>
             <div>
-              <h4 class="text-xs font-semibold text-gray-500 uppercase">Captions</h4>
+              <h4 class="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
+                Captions
+              </h4>
               <ul class="mt-2 space-y-1">
                 <li
                   v-for="c in manifest.captions"
                   :key="c.id"
                   class="flex items-center justify-between"
                 >
-                  <button class="text-sm hover:underline" @click="selectCaption(c.id)">
+                  <button
+                    class="text-sm text-gray-700 hover:text-gray-900 hover:underline dark:text-gray-300 dark:hover:text-gray-100"
+                    @click="selectCaption(c.id)"
+                  >
                     {{ c.label }}
                   </button>
                   <div class="flex items-center gap-2">
@@ -94,18 +109,27 @@
       <div class="col-span-12 space-y-4 md:col-span-6">
         <Card>
           <div class="border-b border-gray-200 p-3 dark:border-gray-700">
-            <h3 class="text-sm font-semibold">Preview</h3>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Preview</h3>
           </div>
           <div class="p-3">
-            <VideoPlayer :url="playerSrc" mode="inline" />
+            <VideoPlayer
+              :url="playerSrc"
+              :audio-tracks="manifest.audio"
+              :selected-audio-id="selectedAudioId || undefined"
+              mode="inline"
+              @audio-track-change="onAudioTrackChange"
+            />
           </div>
         </Card>
         <Card>
           <div class="border-b border-gray-200 p-3 dark:border-gray-700">
-            <h3 class="text-sm font-semibold">Caption Editor</h3>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Caption Editor</h3>
           </div>
           <div class="p-3">
-            <div v-if="captionSegments.length === 0" class="text-sm text-gray-500">
+            <div
+              v-if="captionSegments.length === 0"
+              class="text-sm text-gray-500 dark:text-gray-400"
+            >
               Select a caption track and click Translate to load segments.
             </div>
             <CaptionEditor v-else :segments="captionSegments" @update="onSegmentUpdate" />
@@ -117,7 +141,7 @@
       <div class="col-span-12 space-y-4 md:col-span-3">
         <Card>
           <div class="border-b border-gray-200 p-3 dark:border-gray-700">
-            <h3 class="text-sm font-semibold">Actions</h3>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Actions</h3>
           </div>
           <div class="space-y-2 p-3">
             <Button size="sm" variant="primary" @click="createDubbing">Create Dubbing</Button>
@@ -155,9 +179,9 @@
 
         <Card>
           <div class="border-b border-gray-200 p-3 dark:border-gray-700">
-            <h3 class="text-sm font-semibold">Jobs</h3>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Jobs</h3>
           </div>
-          <div class="p-3 text-sm text-gray-500">
+          <div class="p-3 text-sm text-gray-500 dark:text-gray-400">
             <p v-if="transcodingJobs.length === 0">No jobs yet.</p>
             <ul v-else class="space-y-2">
               <li
@@ -167,7 +191,9 @@
               >
                 <div class="flex flex-col">
                   <span>{{ j.label }}</span>
-                  <span class="text-xs text-gray-400 capitalize">{{ j.status }}</span>
+                  <span class="text-xs text-gray-400 capitalize dark:text-gray-500">{{
+                    j.status
+                  }}</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <span>{{ j.progress }}%</span>
@@ -315,5 +341,10 @@ onMounted(() => {
 
 function onSegmentUpdate(id: string, text: string) {
   mediaEditor.updateCaptionSegment(id, { text })
+}
+
+function onAudioTrackChange(trackId: string) {
+  selectedAudioId.value = trackId
+  mediaEditor.selectAudio(trackId)
 }
 </script>

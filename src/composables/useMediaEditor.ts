@@ -136,9 +136,36 @@ export function useMediaEditor(mediaId: string, options: { autoLoad?: boolean } 
   const captionSegmentsByLang = ref<Record<string, CaptionSegment[]>>({})
 
   // Derived
-  const sourceUrl = computed(() => manifest.value.video[0]?.url || '')
-  const isHls = computed(() => /\.m3u8(\?|$)/i.test(sourceUrl.value))
-  const isMp4 = computed(() => /\.mp4(\?|$)/i.test(sourceUrl.value))
+  const isHls = computed(() => {
+    const masterUrl = String(media.value?.fileUrl || media.value?.url || '')
+    return /\.m3u8(\?|$)/i.test(masterUrl)
+  })
+  const isMp4 = computed(() => {
+    const masterUrl = String(media.value?.fileUrl || media.value?.url || '')
+    return /\.mp4(\?|$)/i.test(masterUrl)
+  })
+  const sourceUrl = computed(() => {
+    // For HLS with audio tracks, use the master playlist URL (media.fileUrl)
+    // For MP4 or HLS without audio tracks, use the first video track URL
+    console.log(
+      'sourceUrl computed - isHls:',
+      isHls.value,
+      'audio.length:',
+      manifest.value.audio.length,
+    )
+    console.log('media.value:', media.value)
+    console.log('master URL:', media.value?.fileUrl || media.value?.url || '')
+    console.log('video track URL:', manifest.value.video[0]?.url || '')
+
+    if (isHls.value && manifest.value.audio.length > 0) {
+      const masterUrl = String(media.value?.fileUrl || media.value?.url || '')
+      console.log('Using master URL:', masterUrl)
+      return masterUrl
+    }
+    const videoUrl = String(manifest.value.video[0]?.url || '')
+    console.log('Using video URL:', videoUrl)
+    return videoUrl
+  })
 
   const tracksVideo = computed(() => manifest.value.video)
   const tracksAudio = computed(() => manifest.value.audio)
