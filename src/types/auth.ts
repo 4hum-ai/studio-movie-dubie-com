@@ -67,5 +67,6 @@ export interface AuthConfig {
   }
   gis?: {
     clientId: string
+    scopes?: string
   }
 }

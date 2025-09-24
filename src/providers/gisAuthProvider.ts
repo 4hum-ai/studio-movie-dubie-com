@@ -19,7 +19,7 @@ interface GoogleJwtPayload {
 }
 
 export class GisAuthProvider implements AuthProvider {
-  private config: { clientId: string }
+  private config: { clientId: string; scopes?: string }
   private initialized = false
   private currentUser: AuthUser | null = null
   private currentToken: string | null = null
@@ -34,7 +34,7 @@ export class GisAuthProvider implements AuthProvider {
   private readonly STORAGE_KEY_PERSISTENCE = 'gis_auth_persistence'
   private readonly STORAGE_KEY_TOKEN_EXPIRES = 'gis_auth_token_expires'
 
-  constructor(config: { clientId: string }) {
+  constructor(config: { clientId: string; scopes?: string }) {
     this.config = config
 
     // Immediately try to restore auth state from storage (synchronous)
@@ -389,7 +389,7 @@ export class GisAuthProvider implements AuthProvider {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const client = (window.google.accounts.oauth2 as any).initTokenClient({
         client_id: this.config.clientId,
-        scope: 'openid email profile',
+        scope: this.config.scopes || 'openid email profile',
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         callback: (response: any) => {
           if (response.access_token) {

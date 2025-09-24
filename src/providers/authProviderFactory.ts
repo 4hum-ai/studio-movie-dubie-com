@@ -64,14 +64,14 @@ export function getAuthConfigFromEnv(): AuthConfig {
     config.firebase = firebaseConfig
   } else if (provider === 'gis') {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
-
+    const scopes = import.meta.env.VITE_GOOGLE_SCOPES as string
     if (!clientId) {
       throw new Error(
         'Missing required Google Identity Services configuration: VITE_GOOGLE_CLIENT_ID',
       )
     }
 
-    config.gis = { clientId }
+    config.gis = { clientId, scopes }
   }
 
   return config
