@@ -115,9 +115,13 @@
             <VideoPlayer
               :url="playerSrc"
               :audio-tracks="manifest.audio"
+              :video-tracks="manifest.video"
               :selected-audio-id="selectedAudioId || undefined"
+              :selected-video-id="selectedVideoId || undefined"
               mode="inline"
+              :use-native-controls="false"
               @audio-track-change="onAudioTrackChange"
+              @video-track-change="onVideoTrackChange"
             />
           </div>
         </Card>
@@ -346,5 +350,10 @@ function onSegmentUpdate(id: string, text: string) {
 function onAudioTrackChange(trackId: string) {
   selectedAudioId.value = trackId
   mediaEditor.selectAudio(trackId)
+}
+
+function onVideoTrackChange(trackId: string) {
+  selectedVideoId.value = trackId
+  mediaEditor.selectVideo(trackId)
 }
 </script>

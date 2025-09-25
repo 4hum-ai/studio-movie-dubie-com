@@ -1,9 +1,11 @@
 <template>
-  <div class="relative bg-black dark:bg-gray-900">
-    <!-- Video Element -->
+  <div class="relative min-h-[300px] bg-black dark:bg-gray-900">
+    <!-- Video Element with Native Controls -->
     <video
       ref="videoRef"
-      class="h-auto w-full"
+      class="h-auto w-full bg-black"
+      :controls="showNativeControls"
+      preload="metadata"
       @loadedmetadata="onLoadedMetadata"
       @timeupdate="onTimeUpdate"
       @ended="onEnded"
@@ -13,6 +15,7 @@
       @volumechange="onVolumeChange"
       @seeking="onSeeking"
       @seeked="onSeeked"
+      @click="togglePlay"
     >
       <track
         v-if="subtitleUrl"
@@ -35,6 +38,19 @@
       </div>
     </div>
 
+    <!-- Large Play Button Overlay (when paused and not using native controls) -->
+    <div
+      v-if="!loading && !error && !showNativeControls && !isPlaying"
+      class="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/20"
+      @click="togglePlay"
+    >
+      <div class="rounded-full bg-black/70 p-4 transition-colors hover:bg-black/80">
+        <svg class="h-12 w-12 text-white" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      </div>
+    </div>
+
     <!-- Error Overlay -->
     <div v-if="error" class="absolute inset-0 flex items-center justify-center bg-black/50">
       <div class="flex flex-col items-center gap-3 text-white">
@@ -53,43 +69,19 @@
       </div>
     </div>
 
-    <!-- Custom Controls -->
+    <!-- Custom Video Controls (Bottom Bar) -->
     <div
-      v-show="!loading && !error"
+      v-show="!showNativeControls"
       class="absolute right-0 bottom-0 left-0 bg-gradient-to-t from-black/80 to-transparent p-4"
-      @mouseenter="showControls = true"
-      @mouseleave="hideControls"
     >
-      <!-- Progress Bar -->
-      <div class="mb-3">
-        <div class="relative h-1 w-full rounded-full bg-white/30">
-          <div
-            class="absolute top-0 left-0 h-full rounded-full bg-blue-500 transition-all duration-150"
-            :style="{ width: `${progress}%` }"
-          ></div>
-          <input
-            ref="progressInput"
-            type="range"
-            min="0"
-            max="100"
-            step="0.1"
-            :value="progress"
-            @input="onProgressChange"
-            @mousedown="isSeeking = true"
-            @mouseup="isSeeking = false"
-            class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          />
-        </div>
-      </div>
-
-      <!-- Control Buttons -->
       <div class="flex items-center justify-between">
+        <!-- Left side controls -->
         <div class="flex items-center gap-3">
-          <!-- Play/Pause -->
+          <!-- Play/Pause Button -->
           <button
             @click="togglePlay"
-            class="text-white transition-colors hover:text-blue-400"
-            :aria-label="isPlaying ? 'Pause' : 'Play'"
+            class="rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/30"
+            aria-label="Play/Pause"
           >
             <svg v-if="!isPlaying" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z" />
@@ -99,115 +91,84 @@
             </svg>
           </button>
 
-          <!-- Volume -->
-          <div class="flex items-center gap-2">
-            <button
-              @click="toggleMute"
-              class="text-white transition-colors hover:text-blue-400"
-              :aria-label="isMuted ? 'Unmute' : 'Mute'"
-            >
-              <svg v-if="!isMuted" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                <path
-                  d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"
-                />
-              </svg>
-              <svg v-else class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                <path
-                  d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"
-                />
-              </svg>
-            </button>
-            <input
-              ref="volumeInput"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              :value="volume * 100"
-              @input="onVolumeInputChange"
-              class="h-1 w-16 cursor-pointer appearance-none rounded-full bg-white/30 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
-            />
-          </div>
-
           <!-- Time Display -->
-          <div class="text-sm text-white">
+          <div class="font-mono text-sm text-white">
             {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
           </div>
         </div>
 
+        <!-- Right side controls -->
         <div class="flex items-center gap-3">
-          <!-- Audio Track Selector -->
-          <div v-if="hasMultipleAudioTracks" class="relative">
-            <select
-              :value="currentAudioTrack?.id || ''"
-              @change="switchAudioTrack(($event.target as HTMLSelectElement).value)"
-              class="appearance-none rounded bg-black/50 px-2 py-1 text-xs text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          <!-- Volume Button -->
+          <div class="relative">
+            <button
+              @click.stop="toggleVolumePanel"
+              class="rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/30"
+              :class="{ 'bg-blue-500': showVolumePanel }"
+              aria-label="Volume"
             >
-              <option
-                v-for="track in availableAudioTracks"
-                :key="track.id"
-                :value="track.id"
-                class="bg-gray-800 text-white"
+              <svg
+                v-if="isMuted || volume === 0"
+                class="h-5 w-5"
+                fill="currentColor"
+                viewBox="0 0 24 24"
               >
-                {{ track.label }}
-              </option>
-            </select>
-            <svg
-              class="absolute top-1/2 right-1 h-3 w-3 -translate-y-1/2 text-white"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fill-rule="evenodd"
-                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                clip-rule="evenodd"
-              />
-            </svg>
+                <path
+                  d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"
+                />
+              </svg>
+              <svg v-else-if="volume < 0.5" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M3 9v6h4l5 5V4L7 9H3z" />
+              </svg>
+              <svg v-else class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                <path
+                  d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"
+                />
+              </svg>
+            </button>
           </div>
 
-          <!-- Subtitle Toggle -->
-          <button
-            v-if="subtitleUrl"
-            @click="toggleSubtitles"
-            class="text-white transition-colors hover:text-blue-400"
-            :class="{ 'text-blue-400': subtitlesEnabled }"
-            :aria-label="subtitlesEnabled ? 'Disable subtitles' : 'Enable subtitles'"
-          >
-            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-              <path
-                d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"
-              />
-            </svg>
-          </button>
+          <!-- Audio Track Button -->
+          <div class="relative" v-if="hasMultipleAudioTracks">
+            <button
+              @click.stop="toggleAudioPanel"
+              class="rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/30"
+              :class="{ 'bg-blue-500': showAudioPanel }"
+              aria-label="Audio Track"
+            >
+              <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                <path
+                  d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"
+                />
+              </svg>
+            </button>
+          </div>
 
-          <!-- Picture-in-Picture -->
-          <button
-            @click="togglePip"
-            class="text-white transition-colors hover:text-blue-400"
-            :class="{ 'text-blue-400': isPipMode }"
-            :aria-label="isPipMode ? 'Exit picture-in-picture' : 'Enter picture-in-picture'"
-          >
-            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-              <path
-                d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"
-              />
-            </svg>
-          </button>
+          <!-- Video Quality Button -->
+          <div class="relative" v-if="hasMultipleVideoTracks">
+            <button
+              @click.stop="toggleVideoPanel"
+              class="rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/30"
+              :class="{ 'bg-blue-500': showVideoPanel }"
+              aria-label="Video Quality"
+            >
+              <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                <path
+                  d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7v6l5-3-5-3z"
+                />
+              </svg>
+            </button>
+          </div>
 
-          <!-- Fullscreen -->
+          <!-- Fullscreen Button -->
           <button
             @click="toggleFullscreen"
-            class="text-white transition-colors hover:text-blue-400"
-            :aria-label="isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+            class="rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/30"
+            aria-label="Fullscreen"
           >
-            <svg v-if="!isFullscreen" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
               <path
                 d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"
-              />
-            </svg>
-            <svg v-else class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-              <path
-                d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"
               />
             </svg>
           </button>
@@ -216,7 +177,7 @@
           <button
             v-if="mode === 'modal'"
             @click="emit('close')"
-            class="text-white transition-colors hover:text-red-400"
+            class="rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-red-500"
             aria-label="Close"
           >
             <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
@@ -226,6 +187,132 @@
             </svg>
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Volume Panel -->
+    <div
+      v-if="showVolumePanel"
+      class="absolute right-4 bottom-16 z-50 min-w-[200px] rounded-lg bg-black/90 p-4 text-white backdrop-blur-sm"
+    >
+      <h3 class="mb-3 text-sm font-medium text-gray-300">Volume</h3>
+      <div class="space-y-3">
+        <!-- Volume Slider -->
+        <div class="flex items-center gap-3">
+          <svg class="h-4 w-4 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M3 9v6h4l5 5V4L7 9H3z" />
+          </svg>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.1"
+            :value="volume"
+            @input="onVolumeSliderChange"
+            class="h-2 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-700"
+          />
+          <svg class="h-4 w-4 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+            <path
+              d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"
+            />
+          </svg>
+        </div>
+
+        <!-- Volume Presets -->
+        <div class="grid grid-cols-3 gap-2">
+          <button
+            @click="setVolume(0)"
+            class="rounded px-2 py-1 text-xs transition-colors"
+            :class="
+              volume === 0
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+            "
+          >
+            Mute
+          </button>
+          <button
+            @click="setVolume(0.5)"
+            class="rounded px-2 py-1 text-xs transition-colors"
+            :class="
+              volume === 0.5
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+            "
+          >
+            50%
+          </button>
+          <button
+            @click="setVolume(1)"
+            class="rounded px-2 py-1 text-xs transition-colors"
+            :class="
+              volume === 1
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+            "
+          >
+            100%
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audio Track Panel -->
+    <div
+      v-if="showAudioPanel"
+      class="absolute right-4 bottom-16 z-50 min-w-[250px] rounded-lg bg-black/90 p-4 text-white backdrop-blur-sm"
+    >
+      <h3 class="mb-3 text-sm font-medium text-gray-300">Audio Track</h3>
+      <div class="space-y-2">
+        <button
+          v-for="track in availableAudioTracks"
+          :key="track.id"
+          @click="switchAudioTrack(track.id)"
+          class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition-colors"
+          :class="
+            currentAudioTrack?.id === track.id
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+          "
+        >
+          <div>
+            <div class="text-sm font-medium">{{ track.label }}</div>
+            <div v-if="track.lang" class="text-xs text-gray-400">{{ track.lang }}</div>
+          </div>
+          <div
+            v-if="currentAudioTrack?.id === track.id"
+            class="h-2 w-2 rounded-full bg-white"
+          ></div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Video Quality Panel -->
+    <div
+      v-if="showVideoPanel"
+      class="absolute right-4 bottom-16 z-50 min-w-[200px] rounded-lg bg-black/90 p-4 text-white backdrop-blur-sm"
+    >
+      <h3 class="mb-3 text-sm font-medium text-gray-300">Video Quality</h3>
+      <div class="space-y-2">
+        <button
+          v-for="track in availableVideoTracks"
+          :key="track.id"
+          @click="switchVideoTrack(track.id)"
+          class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition-colors"
+          :class="
+            currentVideoTrack?.id === track.id
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+          "
+        >
+          <div>
+            <div class="text-sm font-medium">{{ track.label }}</div>
+          </div>
+          <div
+            v-if="currentVideoTrack?.id === track.id"
+            class="h-2 w-2 rounded-full bg-white"
+          ></div>
+        </button>
       </div>
     </div>
 
@@ -242,7 +329,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, computed, nextTick } from 'vue'
 import { useCdn } from '@/composables/useCdn'
 import Hls from 'hls.js'
 
@@ -251,8 +338,11 @@ interface Props {
   title?: string
   subtitleUrl?: string
   audioTracks?: Array<{ id: string; label: string; lang?: string; url?: string }>
+  videoTracks?: Array<{ id: string; label: string; url?: string }>
   selectedAudioId?: string
+  selectedVideoId?: string
   mode: 'modal' | 'inline'
+  useNativeControls?: boolean
 }
 
 const props = defineProps<Props>()
@@ -260,6 +350,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   close: []
   'audio-track-change': [trackId: string]
+  'video-track-change': [trackId: string]
 }>()
 
 // CDN composable
@@ -267,8 +358,6 @@ const { getCdnUrl } = useCdn()
 
 // Refs
 const videoRef = ref<HTMLVideoElement>()
-const progressInput = ref<HTMLInputElement>()
-const volumeInput = ref<HTMLInputElement>()
 
 // State
 const loading = ref(true)
@@ -281,6 +370,11 @@ const showControls = ref(true)
 const subtitlesEnabled = ref(true)
 const isPipMode = ref(false)
 
+// Panel states
+const showVolumePanel = ref(false)
+const showAudioPanel = ref(false)
+const showVideoPanel = ref(false)
+
 // Video state
 const currentTime = ref(0)
 const duration = ref(0)
@@ -291,8 +385,11 @@ const currentSubtitle = ref('')
 // HLS instance
 let hls: Hls | null = null
 
-// Audio track state
+// Track state
 const currentAudioTrackId = ref<string | null>(null)
+const currentVideoTrackId = ref<string | null>(null)
+
+// Playback speeds
 
 // Computed
 const isHLS = computed(() => props.url.includes('.m3u8') || props.url.includes('.m3u'))
@@ -302,6 +399,9 @@ const cdnVideoUrl = computed(() => {
   if (!props.url) return ''
   return getCdnUrl(props.url)
 })
+
+// Control visibility
+const showNativeControls = computed(() => props.useNativeControls === true)
 
 // Audio track computed properties
 const availableAudioTracks = computed(() => props.audioTracks || [])
@@ -314,9 +414,25 @@ const currentAudioTrack = computed(() => {
   )
 })
 
+// Video track computed properties
+const availableVideoTracks = computed(() => props.videoTracks || [])
+const hasMultipleVideoTracks = computed(() => availableVideoTracks.value.length > 1)
+const currentVideoTrack = computed(() => {
+  const trackId = currentVideoTrackId.value || props.selectedVideoId
+  return (
+    availableVideoTracks.value.find((track) => track.id === trackId) ||
+    availableVideoTracks.value[0]
+  )
+})
+
 // Methods
 const initializeVideo = async () => {
-  if (!videoRef.value) return
+  if (!videoRef.value) {
+    await nextTick()
+    if (!videoRef.value) {
+      return
+    }
+  }
 
   const video = videoRef.value
   loading.value = true
@@ -410,10 +526,8 @@ const initializeVideo = async () => {
         console.log('Video element muted:', video.muted)
         console.log('Video element volume:', video.volume)
 
-        video.play().catch(() => {
-          // Autoplay failed, but video is ready
-          loading.value = false
-        })
+        // Don't autoplay, just set loading to false
+        loading.value = false
       })
 
       // Add audio track change event listener
@@ -442,9 +556,6 @@ const initializeVideo = async () => {
 
       video.onloadeddata = () => {
         loading.value = false
-        video.play().catch(() => {
-          loading.value = false
-        })
       }
 
       video.onerror = () => {
@@ -473,6 +584,89 @@ const toggleMute = () => {
 
   videoRef.value.muted = !videoRef.value.muted
   isMuted.value = videoRef.value.muted
+}
+
+const toggleVolumePanel = () => {
+  showVolumePanel.value = !showVolumePanel.value
+  // Close other panels
+  showAudioPanel.value = false
+  showVideoPanel.value = false
+}
+
+const toggleAudioPanel = () => {
+  showAudioPanel.value = !showAudioPanel.value
+  // Close other panels
+  showVolumePanel.value = false
+  showVideoPanel.value = false
+}
+
+const toggleVideoPanel = () => {
+  showVideoPanel.value = !showVideoPanel.value
+  // Close other panels
+  showVolumePanel.value = false
+  showAudioPanel.value = false
+}
+
+const formatTime = (seconds: number): string => {
+  if (!isFinite(seconds)) return '0:00'
+
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+const onVolumeSliderChange = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const newVolume = parseFloat(target.value)
+  setVolume(newVolume)
+}
+
+const setVolume = (newVolume: number) => {
+  if (!videoRef.value) return
+
+  volume.value = newVolume
+  videoRef.value.volume = newVolume
+  videoRef.value.muted = newVolume === 0
+  isMuted.value = newVolume === 0
+}
+
+const switchVideoTrack = (trackId: string) => {
+  if (!videoRef.value) return
+
+  currentVideoTrackId.value = trackId
+  emit('video-track-change', trackId)
+
+  if (isHLS.value && hls) {
+    // For HLS, switch video quality using hls.js
+    const selectedTrack = availableVideoTracks.value.find((track) => track.id === trackId)
+    if (selectedTrack) {
+      console.log('Switching to video track:', selectedTrack)
+
+      // Find the matching HLS level
+      const levelIndex = hls.levels.findIndex((level) => {
+        return (
+          (Array.isArray(level.url) ? level.url[0] : level.url) === selectedTrack.url ||
+          (level.height &&
+            selectedTrack.label &&
+            level.height.toString() === selectedTrack.label.replace('p', ''))
+        )
+      })
+
+      if (levelIndex !== -1) {
+        console.log('Switching to HLS level:', levelIndex)
+        hls.currentLevel = levelIndex
+      } else {
+        console.log('Could not find matching HLS level')
+      }
+    }
+  } else {
+    // For regular video, switch the source
+    const selectedTrack = availableVideoTracks.value.find((track) => track.id === trackId)
+    if (selectedTrack && selectedTrack.url) {
+      videoRef.value.src = getCdnUrl(selectedTrack.url)
+      videoRef.value.load()
+    }
+  }
 }
 
 const switchAudioTrack = (trackId: string) => {
@@ -538,16 +732,6 @@ const switchAudioTrack = (trackId: string) => {
   }
 }
 
-const toggleSubtitles = () => {
-  if (!videoRef.value) return
-
-  const track = videoRef.value.textTracks[0]
-  if (track) {
-    track.mode = track.mode === 'showing' ? 'hidden' : 'showing'
-    subtitlesEnabled.value = track.mode === 'showing'
-  }
-}
-
 const togglePip = async () => {
   if (!videoRef.value) return
 
@@ -587,40 +771,9 @@ const toggleFullscreen = () => {
   }
 }
 
-const onProgressChange = (event: Event) => {
-  if (!videoRef.value || isSeeking.value) return
-
-  const target = event.target as HTMLInputElement
-  const newTime = (parseFloat(target.value) / 100) * duration.value
-  videoRef.value.currentTime = newTime
-}
-
-const onVolumeInputChange = (event: Event) => {
-  if (!videoRef.value) return
-
-  const target = event.target as HTMLInputElement
-  const newVolume = parseFloat(target.value) / 100
-  videoRef.value.volume = newVolume
-  volume.value = newVolume
-}
-
-const formatTime = (seconds: number): string => {
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.floor(seconds % 60)
-  return `${mins}:${secs.toString().padStart(2, '0')}`
-}
-
 const retry = () => {
   error.value = ''
   initializeVideo()
-}
-
-const hideControls = () => {
-  if (isPlaying.value) {
-    setTimeout(() => {
-      showControls.value = false
-    }, 2000)
-  }
 }
 
 // Event handlers
@@ -630,6 +783,7 @@ const onLoadedMetadata = () => {
   duration.value = videoRef.value.duration
   volume.value = videoRef.value.volume
   isMuted.value = videoRef.value.muted
+  loading.value = false
 }
 
 const onTimeUpdate = () => {
@@ -705,8 +859,39 @@ watch(
   },
 )
 
+// Watch for selectedVideoId changes
+watch(
+  () => props.selectedVideoId,
+  (newVideoId) => {
+    if (newVideoId && newVideoId !== currentVideoTrackId.value) {
+      switchVideoTrack(newVideoId)
+    }
+  },
+)
+
+// Close panels when clicking outside
+const handleClickOutside = (event: Event) => {
+  const target = event.target as HTMLElement
+
+  // Don't close if clicking on panel buttons or panels themselves
+  if (
+    target.closest('button[aria-label="Volume"]') ||
+    target.closest('button[aria-label="Audio Track"]') ||
+    target.closest('button[aria-label="Video Quality"]') ||
+    target.closest('.absolute.bottom-16.right-4')
+  ) {
+    return
+  }
+
+  // Close all panels
+  showVolumePanel.value = false
+  showAudioPanel.value = false
+  showVideoPanel.value = false
+}
+
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
+  await nextTick()
   if (props.url) {
     initializeVideo()
   }
@@ -714,6 +899,7 @@ onMounted(() => {
   document.addEventListener('fullscreenchange', onFullscreenChange)
   document.addEventListener('enterpictureinpicture', onPipChange)
   document.addEventListener('leavepictureinpicture', onPipChange)
+  document.addEventListener('click', handleClickOutside)
 
   // Keyboard shortcuts
   const handleKeydown = (event: KeyboardEvent) => {
@@ -753,6 +939,7 @@ onMounted(() => {
     document.removeEventListener('fullscreenchange', onFullscreenChange)
     document.removeEventListener('enterpictureinpicture', onPipChange)
     document.removeEventListener('leavepictureinpicture', onPipChange)
+    document.removeEventListener('click', handleClickOutside)
     document.removeEventListener('keydown', handleKeydown)
 
     if (hls) {
